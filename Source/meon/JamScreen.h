@@ -50,6 +50,7 @@ private:
     std::unique_ptr<ChatPanel> chat;
     std::unique_ptr<ChatRail> rail;
     std::unique_ptr<LeaveDialog> leaveDialog;
+    std::unique_ptr<LeaveDialog> dialogTrash;   // 버튼 콜백 안에서 지우지 않도록 다음 틱에 삭제
     bool chatOpen = true;
     bool quitAfterLeave = false;
     double lastTickMs = 0.0;

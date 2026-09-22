@@ -49,6 +49,23 @@ MeonSession::MeonSession (SonobusAudioProcessor& p, MeonSettings& s, bool plugin
     processor.addClientListener (this);
     pinger = std::make_unique<ServerPinger> (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT);
     pinger->startThread();
+
+    // 플러그인 창을 닫았다 다시 열면 엔진은 이미 서버·방에 붙어 있다. 그 상태를 이어받는다.
+    if (processor.isConnectedToServer())
+    {
+        serverState = ServerState::Connected;
+        wantConnected = true;
+        userName = processor.getCurrentUsername();
+        const auto group = processor.getCurrentJoinedGroup();
+        if (group.isNotEmpty())
+        {
+            roomCode = group;
+            pendingCode = group;
+            roomState = RoomState::InRoom;
+            joinedAtMs = juce::Time::getMillisecondCounterHiRes() - 60000.0;
+            reattached = true;
+        }
+    }
     startTimer (200);
 }
 
@@ -59,8 +76,11 @@ MeonSession::~MeonSession()
     cancelPendingUpdate();
     if (roomState != RoomState::None)
     {
-        log.end ("quit");
-        processor.leaveServerGroup (roomCode.isNotEmpty() ? roomCode : pendingCode);
+        if (log.isActive())
+            log.end (isPlugin ? "editorClosed" : "quit");
+        // 플러그인은 창을 닫아도 합주가 이어진다. 독립 앱은 종료이므로 방을 나간다.
+        if (! isPlugin)
+            processor.leaveServerGroup (roomCode.isNotEmpty() ? roomCode : pendingCode);
     }
     pinger = nullptr;
 }
@@ -204,6 +224,16 @@ void MeonSession::applyPeerDefaults (int peerIndex, Member& m)
 //==============================================================================
 void MeonSession::start()
 {
+    if (reattached && roomState == RoomState::InRoom && ! log.isActive())
+    {
+        MeonSessionLog::AudioInfo audio;
+        if (audioInfoProvider)
+            audio = audioInfoProvider();
+        log.begin (roomCode, userName, isPlugin, audio);
+        log.addEvent ("editorReopened", roomCode);
+        reconcilePeers();
+        listeners.call ([] (Listener& l) { l.sessionStateChanged(); l.membersChanged(); });
+    }
     if (settings.getNickname().trim().isEmpty())
         return;
     wantConnected = true;

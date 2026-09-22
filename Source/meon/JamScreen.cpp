@@ -782,14 +782,22 @@ void JamScreen::showLeaveDialog (bool quit)
 
 void JamScreen::cancelLeave()
 {
-    leaveDialog = nullptr;
+    if (leaveDialog != nullptr)
+    {
+        leaveDialog->setVisible (false);
+        dialogTrash = std::move (leaveDialog);
+    }
     quitAfterLeave = false;
 }
 
 void JamScreen::doLeave()
 {
     const bool quit = quitAfterLeave;
-    leaveDialog = nullptr;
+    if (leaveDialog != nullptr)
+    {
+        leaveDialog->setVisible (false);
+        dialogTrash = std::move (leaveDialog);
+    }
     editor.getSession().leaveRoom();
     if (quit)
         if (auto* app = juce::JUCEApplicationBase::getInstance())
@@ -890,6 +898,7 @@ void JamScreen::updateCards()
 
 void JamScreen::timerCallback()
 {
+    dialogTrash = nullptr;
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);
     lastTickMs = now;

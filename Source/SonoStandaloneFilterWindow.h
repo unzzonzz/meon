@@ -1062,6 +1062,15 @@ private:
                     meonEditor->getAudioDeviceManager = [this]() { return &owner.getDeviceManager();  };
                 }
 
+                // 에디터의 최소·최대 크기를 창에도 적용 (독립 앱 최소 1024×680)
+                if (auto * c = editor->getConstrainer()) {
+                    auto border = owner.getContentComponentBorder();
+                    owner.setResizeLimits (c->getMinimumWidth() + border.getLeftAndRight(),
+                                           c->getMinimumHeight() + border.getTopAndBottom(),
+                                           c->getMaximumWidth() + border.getLeftAndRight(),
+                                           c->getMaximumHeight() + border.getTopAndBottom());
+                }
+
                 editor->addComponentListener (this);
                 componentMovedOrResized (*editor, false, true);
 

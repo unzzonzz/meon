@@ -93,6 +93,8 @@ MeonEditor::~MeonEditor()
 //==============================================================================
 MeonEditor::Screen MeonEditor::initialScreen() const
 {
+    if (session->isInRoom())
+        return Screen::Jam;   // 플러그인 창을 다시 연 경우
     if (settings->getNickname().trim().isEmpty())
         return Screen::Nickname;
     if (! settings->isOnboardingDone (pluginMode))

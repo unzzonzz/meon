@@ -155,6 +155,7 @@ private:
     bool wantConnected = false;
     bool creatingRoom = false;
     bool joinRequested = false;
+    bool reattached = false;
     juce::String userName, roomCode, pendingCode, lastJoinError;
     double nextConnectAttemptMs = 0.0, connectDeadlineMs = 0.0, verifyDeadlineMs = 0.0, joinedAtMs = 0.0;
     double lastSampleMs = 0.0;
