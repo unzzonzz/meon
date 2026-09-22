@@ -19,7 +19,12 @@ endif()
 option(UniversalBinary "Build universal binary for mac" ON)
 
 if (APPLE)
-    set (CMAKE_OSX_DEPLOYMENT_TARGET "10.10" CACHE INTERNAL "")
+    # Xcode 15+ / macOS 26+ SDKs no longer support deployment targets below 10.13.
+    set (CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE INTERNAL "")
+    # JUCE builds its "juceaide" helper in a nested cmake run that does not inherit
+    # CMAKE_OSX_DEPLOYMENT_TARGET. Without this it defaults to the host OS version and
+    # fails on the macOS 26/27 SDK (CGWindowListCreateImage is marked obsoleted in 15.0).
+    set (ENV{MACOSX_DEPLOYMENT_TARGET} "${CMAKE_OSX_DEPLOYMENT_TARGET}")
     if (UniversalBinary)
         set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE INTERNAL "")
         #set(CMAKE_OSX_ARCHITECTURES arm64 x86_64)        
