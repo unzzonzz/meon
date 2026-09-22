@@ -300,7 +300,17 @@ void MeonEditor::applyTestOptions (const juce::String& nickname, const juce::Str
     if (screenName.isNotEmpty())
     {
         const auto n = screenName.toLowerCase();
-        if (n == "settings")       { go (Screen::Home, false); openSettings(); }
+        if (n.startsWith ("settings"))
+        {
+            go (Screen::Home, false);
+            openSettings();
+            const auto which = n.fromFirstOccurrenceOf (":", false, false);   // settings:input 처럼 드롭다운을 열어 둔다
+            if (auto* screen = which.isNotEmpty() ? dynamic_cast<SettingsScreen*> (settingsOverlay.get()) : nullptr)
+            {
+                juce::Component::SafePointer<SettingsScreen> sp (screen);
+                juce::Timer::callAfterDelay (700, [sp, which] { if (sp != nullptr) sp->showPopupForTest (which); });
+            }
+        }
         else if (n == "nick" || n == "nickname") go (Screen::Nickname, false);
         else if (n == "audio")     go (Screen::Audio, false);
         else if (n == "hp" || n == "headphone")  go (Screen::Headphone, false);

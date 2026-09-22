@@ -377,6 +377,18 @@ void SettingsScreen::timerCallback()
     content.pushLevel (db, dt);
 }
 
+void SettingsScreen::showPopupForTest (const juce::String& which)
+{
+    juce::ComboBox* box = which == "input"  ? &content.inCombo
+                        : which == "output" ? &content.outCombo
+                        : which == "buffer" ? &content.bufCombo : nullptr;
+    if (box != nullptr && box->isEnabled())
+    {
+        box->showPopup();
+        box->repaint();
+    }
+}
+
 bool SettingsScreen::handleShortcut (const juce::KeyPress& k)
 {
     if (k == juce::KeyPress::escapeKey)

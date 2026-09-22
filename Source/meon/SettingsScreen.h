@@ -19,6 +19,9 @@ public:
     void resized() override;
     void paint (juce::Graphics&) override;
 
+    /** 개발용: --screen=settings:input|output|buffer 로 드롭다운을 열어 둔 상태를 캡처한다. */
+    void showPopupForTest (const juce::String& which);
+
 private:
     class LinkLabel : public juce::Button
     {

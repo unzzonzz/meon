@@ -13,22 +13,24 @@ public:
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font& font) override;
 
-    // 콤보박스
+    // 콤보박스 (디자인의 select 필드: 높이 48 → 글자 16/여백 14, 높이 40·38 → 글자 15/여백 12)
     void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown,
                        int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox&) override;
     juce::Font getComboBoxFont (juce::ComboBox&) override;
     void positionComboBoxText (juce::ComboBox&, juce::Label&, juce::Drawable*) override;
+    juce::PopupMenu::Options getOptionsForComboBoxPopupMenu (juce::ComboBox&, juce::Label&) override;
 
-    // 팝업 메뉴
+    // 드롭다운 목록 (팝업 메뉴). 배경색을 투명으로 두어 창이 불투명 사각형으로 만들어지지 않게 하고,
+    // OS 그림자 없이 둥근 흰 배경 + 1px 테두리만 직접 그린다.
+    int getMenuWindowFlags() override { return 0; }
+    int getPopupMenuBorderSize() override { return metric::popupPad; }
     void drawPopupMenuBackground (juce::Graphics&, int width, int height) override;
-    void drawPopupMenuItem (juce::Graphics&, const juce::Rectangle<int>& area,
-                            bool isSeparator, bool isActive, bool isHighlighted, bool isTicked, bool hasSubMenu,
-                            const juce::String& text, const juce::String& shortcutKeyText,
-                            const juce::Drawable* icon, const juce::Colour* textColour) override;
+    void drawPopupMenuItemWithOptions (juce::Graphics&, const juce::Rectangle<int>& area, bool isHighlighted,
+                                       const juce::PopupMenu::Item&, const juce::PopupMenu::Options&) override;
+    void getIdealPopupMenuItemSizeWithOptions (const juce::String& text, bool isSeparator, int standardMenuItemHeight,
+                                               int& idealWidth, int& idealHeight, const juce::PopupMenu::Options&) override;
+    void drawPopupMenuUpDownArrow (juce::Graphics&, int width, int height, bool isScrollUpArrow) override;
     juce::Font getPopupMenuFont() override;
-    void getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator, int standardMenuItemHeight,
-                                    int& idealWidth, int& idealHeight) override;
-    int getPopupMenuBorderSize() override { return 1; }
 
     // 텍스트 입력
     void fillTextEditorBackground (juce::Graphics&, int width, int height, juce::TextEditor&) override;
@@ -53,6 +55,11 @@ public:
 
     // 텍스트 버튼(거의 쓰지 않음)
     juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
+
+private:
+    struct FieldMetrics { float fontPx; int pad; int itemH; };
+    static FieldMetrics metricsForField (int fieldHeight);
+    static FieldMetrics metricsForMenu (const juce::PopupMenu::Options&);
 };
 
 } // namespace meon

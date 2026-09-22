@@ -26,7 +26,7 @@ MeonLookAndFeel::MeonLookAndFeel()
     setColour (juce::ComboBox::arrowColourId, col::inkSub);
     setColour (juce::ComboBox::buttonColourId, col::white);
 
-    setColour (juce::PopupMenu::backgroundColourId, col::white);
+    setColour (juce::PopupMenu::backgroundColourId, juce::Colours::transparentWhite); // 불투명이면 JUCE가 메뉴 창을 사각 불투명 창으로 만든다
     setColour (juce::PopupMenu::textColourId, col::ink);
     setColour (juce::PopupMenu::highlightedBackgroundColourId, col::panel);
     setColour (juce::PopupMenu::highlightedTextColourId, col::ink);
@@ -69,42 +69,71 @@ juce::Typeface::Ptr MeonLookAndFeel::getTypefaceForFont (const juce::Font& font)
 }
 
 //==============================================================================
+MeonLookAndFeel::FieldMetrics MeonLookAndFeel::metricsForField (int fieldHeight)
+{
+    // 디자인: 첫 실행 장치 선택 필드 48px = 글자 16px / 안쪽 여백 14px,
+    //         설정 필드 40px(플러그인 38px) = 글자 15px / 안쪽 여백 12px. 목록 항목 높이는 임의(40 / 36).
+    if (fieldHeight >= 46)
+        return { 16.0f, 14, 40 };
+    return { 15.0f, 12, 36 };
+}
+
+MeonLookAndFeel::FieldMetrics MeonLookAndFeel::metricsForMenu (const juce::PopupMenu::Options& options)
+{
+    if (auto* target = options.getTargetComponent())
+        return metricsForField (target->getHeight());
+    return metricsForField (40);
+}
+
 void MeonLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
                                     int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/, juce::ComboBox& box)
 {
+    const auto m = metricsForField (height);
     auto r = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height);
     const bool enabled = box.isEnabled();
+    const bool open = box.isPopupActive();
 
     g.setColour (enabled ? col::white : col::panel);
     g.fillRoundedRectangle (r, (float) metric::radiusButton);
 
-    g.setColour (enabled ? (box.hasKeyboardFocus (true) ? col::accent : col::border) : col::cardBorder);
+    // 테두리: 기본 #D5D5D5, 목록이 열려 있거나 키보드 포커스면 포인트색, 비활성은 #E0E0E0
+    g.setColour (! enabled ? col::cardBorder
+                           : (open || box.hasKeyboardFocus (true)) ? col::accent : col::border);
     g.drawRoundedRectangle (r.reduced (0.5f), (float) metric::radiusButton, 1.0f);
 
-    // 화살표: 아래 방향 작은 삼각형 [임의: 10×5, 오른쪽 여백 16]
+    // 화살표: 디자인의 삼각형(border-left/right 5px, border-top 6px = 10×6), 오른쪽 여백은 필드 안쪽 여백과 같게
     juce::Path tri;
-    const float cx = (float) width - 16.0f - 5.0f;
+    const float right = (float) width - (float) m.pad;
     const float cy = (float) height * 0.5f;
-    tri.addTriangle (cx - 5.0f, cy - 2.5f, cx + 5.0f, cy - 2.5f, cx, cy + 2.5f);
+    tri.addTriangle (right - 10.0f, cy - 3.0f, right, cy - 3.0f, right - 5.0f, cy + 3.0f);
     g.setColour (enabled ? col::inkSub : col::disabled);
     g.fillPath (tri);
 }
 
-juce::Font MeonLookAndFeel::getComboBoxFont (juce::ComboBox&)
+juce::Font MeonLookAndFeel::getComboBoxFont (juce::ComboBox& box)
 {
-    return Fonts::get (400, 16.0f);
+    return Fonts::get (400, metricsForField (box.getHeight()).fontPx);
 }
 
 void MeonLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label, juce::Drawable*)
 {
-    label.setBounds (14, 0, box.getWidth() - 14 - 36, box.getHeight());
+    const auto m = metricsForField (box.getHeight());
+    label.setBounds (m.pad, 0, box.getWidth() - m.pad * 2 - 10 - 8, box.getHeight());
     label.setFont (getComboBoxFont (box));
     label.setColour (juce::Label::textColourId, box.isEnabled() ? col::ink : col::disabled);
+}
+
+juce::PopupMenu::Options MeonLookAndFeel::getOptionsForComboBoxPopupMenu (juce::ComboBox& box, juce::Label& label)
+{
+    // 목록은 필드에 붙지 않고 popupGap 만큼 띄워서 연다 (위로 열릴 때도 같은 간격)
+    return juce::LookAndFeel_V2::getOptionsForComboBoxPopupMenu (box, label)
+             .withTargetScreenArea (box.getScreenBounds().expanded (0, metric::popupGap));
 }
 
 //==============================================================================
 void MeonLookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
 {
+    // 창 자체는 투명(PopupMenu::backgroundColourId 가 투명)이므로 모서리 바깥은 비어 있다
     auto r = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height);
     g.setColour (col::white);
     g.fillRoundedRectangle (r, (float) metric::radiusButton);
@@ -112,37 +141,33 @@ void MeonLookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int width, int
     g.drawRoundedRectangle (r.reduced (0.5f), (float) metric::radiusButton, 1.0f);
 }
 
-void MeonLookAndFeel::drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area,
-                                         bool isSeparator, bool isActive, bool isHighlighted, bool isTicked, bool /*hasSubMenu*/,
-                                         const juce::String& text, const juce::String& /*shortcutKeyText*/,
-                                         const juce::Drawable* /*icon*/, const juce::Colour* /*textColour*/)
+void MeonLookAndFeel::drawPopupMenuItemWithOptions (juce::Graphics& g, const juce::Rectangle<int>& area, bool isHighlighted,
+                                                    const juce::PopupMenu::Item& item, const juce::PopupMenu::Options& options)
 {
-    if (isSeparator)
+    const auto m = metricsForMenu (options);
+
+    if (item.isSeparator)
     {
         g.setColour (col::cardBorder);
-        g.fillRect (area.reduced (8, 0).withHeight (1).withY (area.getCentreY()));
+        g.fillRect (area.reduced (m.pad, 0).withHeight (1).withY (area.getCentreY()));
         return;
     }
 
-    auto r = area.reduced (4, 0);
-    if (isHighlighted && isActive)
+    // 호버/선택 이동: 창 안쪽 여백만큼 들여 쓴 둥근 #F5F5F5 배경
+    if (isHighlighted && item.isEnabled)
     {
         g.setColour (col::panel);
-        g.fillRoundedRectangle (r.toFloat(), 4.0f);
+        g.fillRoundedRectangle (area.reduced (metric::popupPad, 0).toFloat(), (float) metric::popupItemRadius);
     }
 
-    g.setColour (! isActive ? col::disabled : (isTicked ? col::accent : col::ink));
-    g.setFont (Fonts::get (isTicked ? 600 : 400, 15.0f));
-    g.drawText (text, r.reduced (10, 0), juce::Justification::centredLeft, true);
+    // 글자 x 위치는 필드의 글자와 같게 (창 가장자리에서 필드 안쪽 여백만큼). 현재 값은 포인트색 + 세미볼드
+    g.setColour (! item.isEnabled ? col::disabled : (item.isTicked ? col::accent : col::ink));
+    g.setFont (Fonts::get (item.isTicked ? 600 : 400, m.fontPx));
+    g.drawText (item.text, area.reduced (m.pad, 0), juce::Justification::centredLeft, true);
 }
 
-juce::Font MeonLookAndFeel::getPopupMenuFont()
-{
-    return Fonts::get (400, 15.0f);
-}
-
-void MeonLookAndFeel::getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator, int /*standardMenuItemHeight*/,
-                                                 int& idealWidth, int& idealHeight)
+void MeonLookAndFeel::getIdealPopupMenuItemSizeWithOptions (const juce::String& text, bool isSeparator, int /*standardMenuItemHeight*/,
+                                                            int& idealWidth, int& idealHeight, const juce::PopupMenu::Options& options)
 {
     if (isSeparator)
     {
@@ -150,9 +175,29 @@ void MeonLookAndFeel::getIdealPopupMenuItemSize (const juce::String& text, bool 
         idealHeight = 9;
         return;
     }
-    auto font = getPopupMenuFont();
-    idealHeight = 36;
-    idealWidth = (int) font.getStringWidthFloat (text) + 40;
+    const auto m = metricsForMenu (options);
+    idealHeight = m.itemH;
+    idealWidth = (int) Fonts::get (600, m.fontPx).getStringWidthFloat (text) + m.pad * 2;
+}
+
+void MeonLookAndFeel::drawPopupMenuUpDownArrow (juce::Graphics& g, int width, int height, bool isScrollUpArrow)
+{
+    // 목록이 화면보다 길 때의 스크롤 화살표: 그라디언트 없이 흰 배경 + 삼각형
+    g.setColour (col::white);
+    g.fillRect (metric::popupPad, 0, width - metric::popupPad * 2, height);
+
+    juce::Path p;
+    const float hw = (float) width * 0.5f;
+    const float y1 = (float) height * (isScrollUpArrow ? 0.62f : 0.38f);
+    const float y2 = (float) height * (isScrollUpArrow ? 0.38f : 0.62f);
+    p.addTriangle (hw - 5.0f, y1, hw + 5.0f, y1, hw, y2);
+    g.setColour (col::inkSub);
+    g.fillPath (p);
+}
+
+juce::Font MeonLookAndFeel::getPopupMenuFont()
+{
+    return Fonts::get (400, 15.0f);
 }
 
 //==============================================================================

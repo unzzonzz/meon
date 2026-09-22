@@ -40,6 +40,11 @@ namespace metric
     constexpr float pingWarnMs   = 18.0f;
     constexpr int   maxMembers   = 5;    // 나 포함
     constexpr int   maxOthers    = 4;    // 멤버 카드 수
+
+    // 드롭다운 목록 (디자인에 열린 상태가 없어 임의로 정함)
+    constexpr int   popupPad        = 4;   // 목록 창 안쪽 여백
+    constexpr int   popupGap        = 4;   // 필드와 목록 사이 간격
+    constexpr int   popupItemRadius = 4;   // 항목 호버 배경 모서리
 }
 
 /** Pretendard 글꼴 캐시. 에디터가 SharedResourcePointer 로 소유한다. */
