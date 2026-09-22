@@ -54,10 +54,16 @@
 
 extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
+// JUCE 플러그인 클라이언트 헤더가 정의하는 `Component` 매크로(juce::Component)는 MEON 헤더의 juce:: 한정 이름과 충돌한다.
+#ifdef Component
+ #undef Component
+ #define MEON_RESTORE_COMPONENT_MACRO 1
+#endif
 #include "SonoStandaloneFilterWindow.h"
-#include "SonoLookAndFeel.h"
-
-#include "SonobusPluginEditor.h"
+#include "meon/MeonEditor.h"
+#if MEON_RESTORE_COMPONENT_MACRO
+ #define Component juce::Component
+#endif
 
 #if JUCE_ANDROID
 #include "android/SonoBusActivity.h"
@@ -83,26 +89,15 @@ public:
 
         options.applicationName     = getApplicationName();
         options.filenameSuffix      = ".settings";
-        options.osxLibrarySubFolder = "Application Support/SonoBus";
+        options.osxLibrarySubFolder = "Application Support/MEON";
        #if JUCE_LINUX
-        options.folderName          = "~/.config/sonobus";
+        options.folderName          = "~/.config/meon";
        #else
         options.folderName          = "";
        #endif
 
         appProperties.setStorageParameters (options);
 
-#if JUCE_LINUX
-        // we moved linux settings location in 1.3.19, one time change
-        File oldsettings("~/.config/SonoBus.settings");
-        if (oldsettings.exists()) {
-            File newsettings = options.getDefaultFile();
-            if (!newsettings.getParentDirectory().exists()) {
-                newsettings.getParentDirectory().createDirectory();
-                oldsettings.moveFileTo(newsettings);
-            }
-        }
-#endif
     }
 
     ~SonobusStandaloneFilterApp()
@@ -116,7 +111,6 @@ public:
     const String getApplicationVersion() override           { return JucePlugin_VersionString; }
     bool moreThanOneInstanceAllowed() override              { return true; }
 
-    SonoLookAndFeel  sonoLNF;
 
     AooServerConnectionInfo cmdlineConnInfo;
 
@@ -126,6 +120,10 @@ public:
     bool doHeadless = false;
     String loadSetupFilename;
     String cmdlineArgUrl;
+
+    // MEON 개발·테스트 옵션
+    String meonScreen, meonNickname, meonJoinCode, meonWindow;
+    bool meonCreate = false, meonEnter = false, meonNoInput = false;
 
     virtual StandalonePluginHolder* createHeadlessPlugin ()
     {
@@ -153,8 +151,8 @@ public:
             Timer::callAfterDelay (800, []()
                                    {
                 AlertWindow::showMessageBoxAsync (AlertWindow::WarningIcon,
-                                                  TRANS("Crashed Last Time"),
-                                                  TRANS("Looks like you crashed on launch last time, restoring default settings!"));
+                                                  juce::String (juce::CharPointer_UTF8 ("\xec\x9d\xb4\xec\xa0\x84 \xec\x8b\xa4\xed\x96\x89 \xec\x98\xa4\xeb\xa5\x98")),
+                                                  juce::String (juce::CharPointer_UTF8 ("\xec\xa7\x80\xeb\x82\x9c\xeb\xb2\x88 \xec\x8b\xa4\xed\x96\x89\xec\x9d\xb4 \xec\xa0\x95\xec\x83\x81\xec\xa0\x81\xec\x9c\xbc\xeb\xa1\x9c \xeb\x81\x9d\xeb\x82\x98\xec\xa7\x80 \xec\x95\x8a\xec\x95\x84 \xec\x84\xa4\xec\xa0\x95\xec\x9d\x84 \xec\xb4\x88\xea\xb8\xb0\xed\x99\x94\xed\x96\x88\xec\x8a\xb5\xeb\x8b\x88\xeb\x8b\xa4.")));
             });
         }
         else {
@@ -213,16 +211,19 @@ public:
             crashSentinelFile.create();
         }
 
-        LookAndFeel::setDefaultLookAndFeel(&sonoLNF);
+
+        juce::Array<StandalonePluginHolder::PluginInOuts> meonChannelConfig;
+        if (meonNoInput)
+            meonChannelConfig.add ({ 0, 2 });   // 테스트용: 입력 없이 실행 (마이크 권한 요청 없음)
 
         auto wind = new StandaloneFilterWindow (getApplicationName(),
-                                           LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
+                                           Colour (0xFFFFFFFF),
                                            appProperties.getUserSettings(),
                                            false, {}, &setupOptions
                                           #ifdef JucePlugin_PreferredChannelConfigurations
                                            , juce::Array<StandalonePluginHolder::PluginInOuts> (channels, juce::numElementsInArray (channels))
                                           #else
-                                           , {}
+                                           , meonChannelConfig
                                           #endif
                                           //#if JUCE_DONT_AUTO_OPEN_MIDI_DEVICES_ON_MOBILE
                                            , false
@@ -424,6 +425,18 @@ public:
             }
         }
 
+        // MEON 개발·테스트 옵션
+        meonNickname = arglist.removeValueForOption ("--nickname");
+        meonScreen   = arglist.removeValueForOption ("--screen");
+        meonJoinCode = arglist.removeValueForOption ("--join");
+        meonWindow   = arglist.removeValueForOption ("--window");
+        meonCreate   = arglist.removeOptionIfFound ("--create");
+        meonEnter    = arglist.removeOptionIfFound ("--enter");
+        meonNoInput  = arglist.removeOptionIfFound ("--no-input");
+        if (meonNickname.isNotEmpty() || meonScreen.isNotEmpty() || meonCreate || meonJoinCode.isNotEmpty() || meonNoInput)
+            std::cerr << "MEON test options: nickname=" << meonNickname << " screen=" << meonScreen << " create=" << (int) meonCreate
+                      << " join=" << meonJoinCode << " noinput=" << (int) meonNoInput << " window=" << meonWindow << std::endl;
+
         // what args remain? assume it's a URL
         if (arglist.arguments.size() > 0) {
             cmdlineArgUrl = arglist.arguments.getLast().text;
@@ -457,50 +470,21 @@ public:
 
             if (auto * sonoproc = dynamic_cast<SonobusAudioProcessor*>(mainWindow->pluginHolder->processor.get())) {
                 if (sonoproc->hasEditor()) {
-                    if (auto * sonoeditor = dynamic_cast<SonobusAudioProcessorEditor*>(sonoproc->createEditorIfNeeded())) {
-                        sonoeditor->saveSettingsIfNeeded = [this]() {
+                    if (auto * meonEditor = dynamic_cast<meon::MeonEditor*>(sonoproc->createEditorIfNeeded())) {
+                        meonEditor->saveSettingsIfNeeded = [this]() {
                             mainWindow->pluginHolder->savePluginState();
                             mainWindow->pluginHolder->saveAudioDeviceState();
                             appProperties.saveIfNeeded();
                         };
-
-                        // apply command line connection stuff
-
-                        if (doInitialConnect) {
-                            DBG("CONNECTING INITIAL");
-                            sonoeditor->connectWithInfo(cmdlineConnInfo, false, false);
-                        } else if (copyInfo) {
-                            // only copy info
-                            DBG("COPYING INITIAL");
-                            sonoeditor->connectWithInfo(cmdlineConnInfo, false, true);
-                        }
-                        else if (cmdlineArgUrl.isNotEmpty()) {
-#if JUCE_LINUX
-                            // Linux only, as this is handled through other means on other platforms
-                            // handle the last arg as a connect URL
-                            sonoeditor->handleURL(cmdlineArgUrl);
-#endif
-                        }
-
-                        if (loadSetupFilename.isNotEmpty()) {
-                            File setupfile = File::getCurrentWorkingDirectory().getChildFile(loadSetupFilename);
-                            if (!setupfile.exists()) {
-                                // try the default location
-                                String recentsfolder = mainWindow->pluginHolder->getLastRecentsFolder();
-                                if (recentsfolder.isNotEmpty()) {
-                                    setupfile = File(recentsfolder).getChildFile(setupfile.getFileName());
-                                }
-                            }
-                            if (setupfile.exists()) {
-                                Thread::sleep(200); // just in case
-                                sonoeditor->loadSettingsFromFile(setupfile);
-                            }
-                            else {
-                                std::cerr << "Settings file does not exist: " << loadSetupFilename << std::endl;
-                            }
-                        }
+                        if (meonNickname.isNotEmpty() || meonScreen.isNotEmpty() || meonCreate || meonJoinCode.isNotEmpty())
+                            meonEditor->applyTestOptions (meonNickname, meonScreen, meonCreate, meonJoinCode, meonEnter);
                     }
-                }
+            }
+            }
+            if (meonWindow.isNotEmpty()) {
+                auto parts = StringArray::fromTokens (meonWindow, ",", "");
+                if (parts.size() == 4)
+                    mainWindow->setBounds (parts[0].getIntValue(), parts[1].getIntValue(), parts[2].getIntValue(), parts[3].getIntValue());
             }
 
 #if JUCE_ANDROID && JUCE_OPENGL
@@ -696,36 +680,15 @@ public:
     }
     
     void urlOpened(const URL & url) override {
-        DBG("Url opened: " << url.toString(true));
-        
-        if (mainWindow.get() != nullptr) {
-            
-            if (auto * sonoproc = dynamic_cast<SonobusAudioProcessor*>(mainWindow->pluginHolder->processor.get())) {
-                if (sonoproc->hasEditor()) {
-                    if (auto * sonoeditor = dynamic_cast<SonobusAudioProcessorEditor*>(sonoproc->createEditorIfNeeded())) {
-                        sonoeditor->handleURL(url.toString(true));
-                        mainWindow->toFront(true);
-                    }
-                }
-            }
-        }        
+        // MEON 은 URL 스킴/링크 연결을 쓰지 않는다. 창만 앞으로.
+        if (mainWindow.get() != nullptr)
+            mainWindow->toFront(true);
     }
     
     void anotherInstanceStarted (const String& url) override    {
-        
-        DBG("Url handled from another instance: " << url);
-        
-        if (mainWindow.get() != nullptr) {
-            
-            if (auto * sonoproc = dynamic_cast<SonobusAudioProcessor*>(mainWindow->pluginHolder->processor.get())) {
-                if (sonoproc->hasEditor()) {
-                    if (auto * sonoeditor = dynamic_cast<SonobusAudioProcessorEditor*>(sonoproc->createEditorIfNeeded())) {
-                        sonoeditor->handleURL(url);
-                        mainWindow->toFront(true);
-                    }
-                }
-            }
-        }
+        // MEON 은 URL 스킴/링크 연결을 쓰지 않는다. 창만 앞으로.
+        if (mainWindow.get() != nullptr)
+            mainWindow->toFront(true);
     }
         
     void suspended() override
@@ -816,8 +779,8 @@ public:
         
         if (mainWindow.get() != nullptr) {
             if (auto * editor = mainWindow->getEditor()) {
-                if (auto * sonoeditor = dynamic_cast<SonobusAudioProcessorEditor*>(editor)) {
-                    if (!sonoeditor->requestedQuit()) {
+                if (auto * meonEditor = dynamic_cast<meon::MeonEditor*>(editor)) {
+                    if (!meonEditor->requestedQuit()) {
                         // they'll handle it
                         return;
                     }

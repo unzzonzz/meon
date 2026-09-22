@@ -4,7 +4,7 @@
 
 
 #include "SonobusPluginProcessor.h"
-#include "SonobusPluginEditor.h"
+#include "meon/MeonEditor.h"
 
 #include "RunCumulantor.h"
 
@@ -8414,7 +8414,7 @@ bool SonobusAudioProcessor::hasEditor() const
 
 AudioProcessorEditor* SonobusAudioProcessor::createEditor()
 {
-    return new SonobusAudioProcessorEditor (*this);
+    return new meon::MeonEditor (*this);
 }
 
 AudioProcessorValueTreeState& SonobusAudioProcessor::getValueTreeState()

@@ -35,7 +35,7 @@
 #include "CrossPlatformUtils.h"
 
 // HACK
-#include "SonobusPluginEditor.h"
+#include "meon/MeonEditor.h"
 
 #include <limits>
 #include <algorithm>
@@ -1057,21 +1057,11 @@ private:
 
             if (editor != nullptr)
             {
-                // hack to allow editor to get devicemanager
-                if (auto * sonoeditor = dynamic_cast<SonobusAudioProcessorEditor*>(editor.get())) {
-                    sonoeditor->getAudioDeviceManager = [this]() { return &owner.getDeviceManager();  };
-                    sonoeditor->getInputChannelGroupsView()->getAudioDeviceManager = [this]() { return &owner.getDeviceManager();  };
-                    sonoeditor->getPeersContainerView()->getAudioDeviceManager = [this]() { return &owner.getDeviceManager();  };
-                    sonoeditor->isInterAppAudioConnected = [this]() { return owner.pluginHolder->isInterAppAudioConnected();  };
-                    sonoeditor->getIAAHostIcon = [this](int size) { return owner.pluginHolder->getIAAHostIcon(size);  };
-                    sonoeditor->switchToHostApplication = [this]() { return owner.pluginHolder->switchToHostApplication(); };
-                    sonoeditor->getShouldOverrideSampleRateValue = [this]() { return &(owner.pluginHolder->getShouldOverrideSampleRateValue()); };
-                    sonoeditor->getAllowBluetoothInputValue = [this]() { return &(owner.pluginHolder->getAllowBluetoothInputValue()); };
-                    sonoeditor->getShouldCheckForNewVersionValue = [this]() { return &(owner.pluginHolder->getShouldCheckForNewVersionValue()); };
-                    sonoeditor->getRecentSetupFiles = [this]() { return &(owner.pluginHolder->getRecentSetupFiles()); };
-                    sonoeditor->getLastRecentsFolder = [this]() { return &owner.pluginHolder->getLastRecentsFolder(); };
+                // 에디터가 오디오 장치 관리자에 접근할 수 있게 연결
+                if (auto * meonEditor = dynamic_cast<meon::MeonEditor*>(editor.get())) {
+                    meonEditor->getAudioDeviceManager = [this]() { return &owner.getDeviceManager();  };
                 }
-                
+
                 editor->addComponentListener (this);
                 componentMovedOrResized (*editor, false, true);
 

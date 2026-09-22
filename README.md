@@ -1,128 +1,73 @@
+# MEON
 
-# SonoBus
+**MEON**은 최대 5명이 6자리 초대 코드로 모여 실시간으로 합주하는 데스크톱 앱입니다 (macOS / Windows).
+독립 앱과 DAW 플러그인(AU / VST3) 두 가지 형태로 쓸 수 있습니다.
 
-SonoBus is an easy to use application for streaming high-quality, low-latency peer-to-peer audio between devices over the internet or a local network.
+> **이 소프트웨어는 [SonoBus](https://github.com/sonosaurus/sonobus)(Jesse Chappell, Sonosaurus LLC)의 수정판입니다.**
+> 오디오 엔진, 네트워크(AOO), 코덱은 SonoBus 1.7.2 를 그대로 사용하고, 화면과 기본값만 MEON 에 맞게 새로 만들었습니다.
+> SonoBus 와 마찬가지로 **GPLv3** (+ `LICENSE_EXCEPTION`)로 공개합니다. 원본 저작권 표기는 [LICENSE](LICENSE)와 앱의 설정 > 앱 정보에 있습니다.
 
-Simply choose a unique group name (with optional password), and instantly connect multiple people together to make music, remote sessions, podcasts, etc. Easily record the audio from everyone, as well as playback any audio content to the whole group.
+## 무엇이 다른가
 
-Connects multiple users together to send and receive audio among all in a group, with fine-grained control over latency, quality and overall mix. Includes optional input compression, noise gate, and EQ effects, along with a master reverb. All settings are dynamic, network statistics are clearly visible.
+| | SonoBus | MEON |
+|---|---|---|
+| 방 | 그룹 이름 + 비밀번호, 공개 그룹 목록 | 6자리 초대 코드 (항상 비공개), 최대 5명 |
+| 코덱 | Opus / PCM 선택 | 무압축 PCM 16 bit 고정 |
+| 지터버퍼 | 수동/자동 선택 | 자동 |
+| 이펙트·녹음·재생 | 있음 | 없음 (숨김) |
+| UI | 영어 등 다국어 | 한국어 전용, 새 디자인 |
+| 서버 | aoo.sonobus.net (기본) | 동일 (자체 서버는 다음 단계) |
 
-Works as a standalone application on macOS, Windows, iOS, and Linux, and as an audio plugin (AU, VST) on macOS and Windows. Use it on your desktop or in your DAW, or on your mobile device.
+식별자도 SonoBus 와 겹치지 않게 새로 정했습니다 (번들 ID `com.meon.MEON`, 제조사 코드 `Meon`, 플러그인 코드 `Mjam`).
+같은 컴퓨터에 SonoBus 가 설치되어 있어도 충돌하지 않습니다.
 
-Easy to setup and use, yet still provides all the details that audio nerds want to see. Audio quality can be instantly adjusted from full uncompressed PCM (16, 24, or 32 bit) or with various compressed bitrates (16-256 kbps per channel) using the low-latency Opus codec, and you can do this independently for any of the users you are connected with in a group.
+## 빌드
 
+CMake 3.15 이상. 의존성(JUCE 7 포크, AOO, Opus 정적 라이브러리)은 저장소에 포함되어 있습니다.
 
-<img src="https://sonobus.net/assets/images/sonobus_screenshot.png" width="871" />
+### macOS
 
-**IMPORTANT TIPS**
-
-SonoBus does not use any echo cancellation, or automatic noise
-reduction in order to maintain the highest audio quality. As a result, if you have a live microphone signal you will need to also use headphones to prevent echos and/or feedback.
-
-For best results, and to achieve the lowest latencies, connect your computer with wired ethernet to your router if you can. Although it will work with WiFi, the added network jitter and packet loss will require you to use a bigger safety buffer to maintain a quality audio signal, which results in higher latencies.
-
-SonoBus does NOT currently use any encryption for the data
-communication, so while it is unlikely that it will be
-intercepted, please keep that in mind. All audio is sent directly between users peer-to-peer, the connection server is only used so that the users in a group can find each other.
-
-
-
-# Installing
-
-## Windows and Mac
-There are binary releases for macOS and Windows available at [sonobus.net](https://sonobus.net) or in the releases of this repository on GitHub.
-
-## Linux
-
-There are packages available for Debian-based Linux distributions as well as a Snap package. See installation instructions at [sonobus.net/linux.html](https://sonobus.net/linux.html).
-
-Or if you prefer, you can build it yourself following the [build instructions](#on-linux) below.
-
-# Building
-
-The original GitHub repository for this project is at
-[github.com/sonosaurus/sonobus](https://github.com/sonosaurus/sonobus).
-
-To build from source on macOS and Windows, all of the dependencies are a part of this GIT repository, including prebuilt Opus libraries. 
-The build now uses [CMake](https://cmake.org) 3.15 or above on macOS, Windows, and Linux platforms, see
-details below.
-
-### On macOS
-
-Make sure you have [CMake](https://cmake.org) >= 3.15 and XCode. Then run:
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -B build
+cmake --build build --config Release -j 8
 ```
-./setupcmake.sh
-./buildcmake.sh
-``` 
-The resulting application and plugins will end up under `build/SonoBus_artefacts/Release`
-when the build completes. If you would rather have an Xcode project to look
-at, use `./setupcmakexcode.sh` instead and use the Xcode project that gets
-produced at `buildXcode/SonoBus.xcodeproj`.
 
-### On Windows
+결과물: `build/MEON_artefacts/Release/{Standalone/MEON.app, AU/MEON.component, VST3/MEON.vst3}`
 
-You will need [CMake](https://cmake.org) >= 3.15, and  Visual Studio 2017
-installed. You'll also need Cygwin installed if you want to use the scripts
-below, but you can also use CMake in other ways if you prefer.
+- 기본은 유니버설(x86_64 + arm64) 빌드입니다. 개발 중에는 `-DUniversalBinary=OFF` 로 현재 아키텍처만 빌드하면 빠릅니다.
+- Xcode 라이선스에 동의하지 않은 상태라면 `export DEVELOPER_DIR=/Library/Developer/CommandLineTools` 로 Command Line Tools 만으로 빌드할 수 있습니다.
+- Xcode 프로젝트가 필요하면 `./setupcmakexcode.sh` (Xcode 라이선스 동의 필요).
 
-```
-./setupcmakewin.sh
-./buildcmake.sh
-``` 
-The resulting application and plugins will end up under `build/SonoBus_artefacts/Release`
-when the build completes. The MSVC project/solution can be found in
-build/SonoBus_artefacts as well after the cmake setup step.
+### Windows
 
+Visual Studio 2019 이상 + CMake. **ASIO SDK 2.3.4 이상**이 필요합니다 (2025년 10월부터 GPLv3 이중 라이선스).
 
-### On Linux
+1. https://www.steinberg.net/asiosdk 에서 SDK 를 받아 저장소 폴더 **옆**에 `asiosdk` 라는 이름으로 풉니다 (`../asiosdk/common/iasiodrv.h` 가 있어야 함). 다른 위치라면 `-DASIO_SDK_PATH=경로`.
+2. ```
+   cmake -G "Visual Studio 17 2022" -A x64 -B build
+   cmake --build build --config Release
+   ```
 
-The first thing to do in a terminal is go to the Linux directory:
+결과물: `build/MEON_artefacts/Release/{Standalone/MEON.exe, VST3/MEON.vst3}`
 
-    cd linux
+## 설치 (테스터용)
 
-And read the [BUILDING.md](linux/BUILDING.md) file for
-further instructions.
+서명·공증을 하지 않은 빌드입니다. 경고를 넘기는 방법과 플러그인 설치 위치는 [doc/INSTALL.md](doc/INSTALL.md)를 보세요.
 
+## 로그
 
-# License and 3rd Party Software
+방에 있는 동안 멤버별 핑·지연·지터버퍼·패킷 손실·끊김 횟수를 5초마다 JSON 으로 기록합니다.
+설정 > 문제 해결 > "로그 폴더 열기" (macOS `~/Library/Logs/MEON`, Windows `%APPDATA%\MEON\logs`).
 
-SonoBus was written by Jesse Chappell, and it is licensed under the GPLv3, the full license text is in the LICENSE file. Some of the dependencies have their own more permissive licenses.
+## 진행 기록
 
-It is built using JUCE 6 (slightly modified on a public fork), and AOO (Audio over OSC), which also uses the Opus codec. I'm using the very handy tool `git-subrepo` to include the source code for my forks of those software libraries in this repository.
+단계별 작업 내용과 판단이 필요한 항목은 [doc/MEON_PROGRESS.md](doc/MEON_PROGRESS.md)에 있습니다.
+원본 SonoBus 코드 구조 참고 자료: [doc/dev/](doc/dev/).
 
+## 라이선스와 3rd party
 
-My github forks of these that are referenced via `git-subrepo` in this repository are:
-
-> https://github.com/essej/JUCE  in the sono6good branch.
-
-> https://github.com/essej/aoo.git   in the sono branch.
-
-
-If you want to run your own connection server instead of using the default
-one at aoo.sonobus.net, you can build the headless aooserver code at
-
-> https://github.com/essej/aooserver
-
-The standalone SonoBus application also provides a connection server internally,
-which you can connect to on port 10999, or port forward TCP/UDP 10999 from your internet
-router to the machine you are running it on.
-
-
-# Thanks
-
-Thanks for everyone involved in testing, especially to Christof Ressi for
-the AOO library.
-
-### Software development credits:
-
-- For designing and implementing the Soundboard feature:
-    - Sten Wessel
-    - Hannah Schellekens
-
-### Documentation credits:
- - Michael Eskin
- - Tony Becker
-
-### Translation credits:
- - RelationLife (Taewook Yang)
- 
+- MEON / SonoBus: GPLv3 — [LICENSE](LICENSE), [LICENSE_EXCEPTION](LICENSE_EXCEPTION)
+- SonoBus 원저작자: Jesse Chappell (Sonosaurus LLC). 원본 저장소 https://github.com/sonosaurus/sonobus
+- JUCE 7 (essej 포크, GPLv3), AOO (Christof Ressi, essej 포크), Opus (BSD), ff_meters (BSD)
+- Pretendard 글꼴 (Kil Hyung-jin, SIL OFL 1.1) — `Source/fonts/LICENSE-Pretendard.txt`
+- ASIO SDK (Steinberg, GPLv3 옵션) — Windows 빌드 시에만 사용, 저장소에는 포함하지 않음
