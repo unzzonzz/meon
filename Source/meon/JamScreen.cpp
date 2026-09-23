@@ -526,6 +526,7 @@ private:
             return;
         owner.sendChatText (text);
         input.clear();
+        input.grabKeyboardFocus();   // 전송 버튼을 눌러 보냈어도 이어서 입력할 수 있게
     }
 
     JamScreen& owner;

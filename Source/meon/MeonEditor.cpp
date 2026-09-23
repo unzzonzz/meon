@@ -60,6 +60,7 @@ MeonEditor::MeonEditor (SonobusAudioProcessor& p)
 
     setOpaque (true);
     setWantsKeyboardFocus (true);
+    addMouseListener (this, true);   // 어느 자식을 클릭해도 mouseDown 을 받아 텍스트 입력 포커스를 거둘 수 있게
 
     // 크기: 독립 앱 기본 1280×800 (최소 1024×680), 플러그인 기본 900×600 (최소 760×520)
     {
@@ -378,8 +379,14 @@ void MeonEditor::resized()
     processor.setLastPluginBounds (getLocalBounds());
 }
 
-void MeonEditor::mouseDown (const juce::MouseEvent&)
+void MeonEditor::mouseDown (const juce::MouseEvent& e)
 {
+    // 포커스를 받지 않는 영역(빈 곳, 카드, 라벨, 버튼)을 클릭하면 에디터가 포커스를 가져가
+    // 채팅 입력 등 텍스트 입력에서 포커스가 빠지고 글자 단축키가 다시 듣는다.
+    // 텍스트 입력이나 스스로 포커스를 받는 컴포넌트(코드 입력 등)를 클릭한 경우는 건드리지 않는다.
+    for (auto* c = e.eventComponent; c != nullptr && c != this; c = c->getParentComponent())
+        if (c->getWantsKeyboardFocus() || dynamic_cast<juce::TextEditor*> (c) != nullptr)
+            return;
     grabKeyboardFocus();
 }
 
