@@ -95,24 +95,21 @@ void SettingsScreen::Content::refreshDevices()
     fill (inCombo, type != nullptr ? type->getDeviceNames (true) : juce::StringArray(), setup.inputDeviceName);
     fill (outCombo, type != nullptr ? type->getDeviceNames (false) : juce::StringArray(), setup.outputDeviceName);
 
+    // 버퍼 크기는 첫 실행 화면과 같은 네 가지만 보여 준다 (장치가 지원하는 전체 목록은 너무 길다)
     bufCombo.clear (juce::dontSendNotification);
-    bufferChoices.clear();
+    bufferChoices = { 64, 128, 256, 512 };
     const double sr = setup.sampleRate > 0.0 ? setup.sampleRate : 48000.0;
     int current = setup.bufferSize;
     if (auto* dev = dm->getCurrentAudioDevice())
-    {
         current = dev->getCurrentBufferSizeSamples();
-        for (int size : dev->getAvailableBufferSizes())
-            if (size >= 32 && size <= 1024)
-                bufferChoices.add (size);
-    }
-    if (bufferChoices.isEmpty())
-        bufferChoices = { 64, 128, 256, 512 };
+    auto label = [sr] (int size) { return juce::String (size) + TXT (" 샘플 · ") + juce::String (size / sr * 1000.0, 1) + " ms"; };
     for (int i = 0; i < bufferChoices.size(); ++i)
-        bufCombo.addItem (juce::String (bufferChoices[i]) + TXT (" 샘플 · ") + juce::String (bufferChoices[i] / sr * 1000.0, 1) + " ms", i + 1);
+        bufCombo.addItem (label (bufferChoices[i]), i + 1);
     const int bi = bufferChoices.indexOf (current);
     if (bi >= 0)
         bufCombo.setSelectedId (bi + 1, juce::dontSendNotification);
+    else if (current > 0)
+        bufCombo.setText (label (current), juce::dontSendNotification);   // 네 가지 밖의 값(장치가 고른 값)은 그대로 보여 준다
     bufCombo.setEnabled (dm->getCurrentAudioDevice() != nullptr);
     updating = false;
 }
