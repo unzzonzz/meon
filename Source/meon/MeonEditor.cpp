@@ -381,12 +381,23 @@ void MeonEditor::resized()
 
 void MeonEditor::mouseDown (const juce::MouseEvent& e)
 {
-    // 포커스를 받지 않는 영역(빈 곳, 카드, 라벨, 버튼)을 클릭하면 에디터가 포커스를 가져가
-    // 채팅 입력 등 텍스트 입력에서 포커스가 빠지고 글자 단축키가 다시 듣는다.
-    // 텍스트 입력이나 스스로 포커스를 받는 컴포넌트(코드 입력 등)를 클릭한 경우는 건드리지 않는다.
+    // 입력(채팅·닉네임·초대 코드) 밖을 클릭하면 에디터가 포커스를 가져가 입력에서 포커스가 빠지고
+    // 글자 단축키가 다시 듣는다. JUCE 는 클릭한 곳이 포커스를 가진 입력을 품고 있으면 포커스를
+    // 그대로 두기 때문에(설정 화면 본문, 합주 화면 등) 여기서 직접 옮긴다.
+    auto* focused = juce::Component::getCurrentlyFocusedComponent();
+    if (focused == nullptr || focused == this)
+        return;
+
+    // 지금 포커스를 가진 입력 안을 클릭한 것이면 그대로
+    if (focused == e.eventComponent || focused->isParentOf (e.eventComponent))
+        return;
+
+    // 클릭한 컴포넌트(또는 상위)가 스스로 포커스를 받는 것이면 JUCE 가 옮긴다.
+    // Viewport 는 포커스를 원하지만 스크롤 영역일 뿐이므로 예외.
     for (auto* c = e.eventComponent; c != nullptr && c != this; c = c->getParentComponent())
-        if (c->getWantsKeyboardFocus() || dynamic_cast<juce::TextEditor*> (c) != nullptr)
+        if (c->getWantsKeyboardFocus() && dynamic_cast<juce::Viewport*> (c) == nullptr)
             return;
+
     grabKeyboardFocus();
 }
 

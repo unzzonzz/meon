@@ -67,6 +67,9 @@ class MeonTextEditor : public juce::TextEditor
 public:
     explicit MeonTextEditor (float fontPx = 17.0f, int weight = 400);
     void setPlaceholder (const juce::String& text);
+
+    /** 한글 입력기가 조합 중인 글자(마지막 음절)에 JUCE 가 점선 밑줄을 그리는데, macOS 기본 입력창처럼 표시하지 않는다. */
+    void setTemporaryUnderlining (const juce::Array<juce::Range<int>>&) override {}
 };
 
 //==============================================================================
