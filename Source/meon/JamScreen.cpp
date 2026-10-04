@@ -232,25 +232,13 @@ public:
         const int nameX = inner.getX() + (int) dot + (plugin ? 8 : 10);
         g.drawText (member.displayName, juce::Rectangle<int> (nameX, inner.getY(), inner.getWidth() / 2, headerH), juce::Justification::centredLeft, true);
 
-        // 핑 + 지연 배지 (오른쪽)
+        // 핑 (오른쪽). 18 ms 초과는 숫자 색 + 카드 테두리 + 하단 문구로만 표시
         juce::String pingText = (off || ! member.hasStats) ? TXT ("— ms") : juce::String ((int) std::lround (member.pingMs)) + " ms";
         auto pingFont = Fonts::get (600, plugin ? 13.0f : 15.0f);
         g.setFont (pingFont);
-        g.setColour (off ? col::disabled : (warn ? col::accent : col::inkBody));
+        g.setColour (off ? col::disabled : (warn ? col::accentText : col::inkBody));
         const int pingW = (int) std::ceil (pingFont.getStringWidthFloat (pingText));
         g.drawText (pingText, juce::Rectangle<int> (inner.getRight() - pingW, inner.getY(), pingW, headerH), juce::Justification::centredRight, false);
-        if (warn)
-        {
-            auto badgeFont = Fonts::get (600, plugin ? 11.0f : 12.0f);
-            const float bw = badgeFont.getStringWidthFloat (TXT ("지연")) + (plugin ? 12.0f : 16.0f);
-            const float bh = badgeFont.getHeight() + (plugin ? 4.0f : 6.0f);
-            juce::Rectangle<float> badge ((float) (inner.getRight() - pingW) - (plugin ? 6.0f : 8.0f) - bw, (float) inner.getY() + (float) headerH * 0.5f - bh * 0.5f, bw, bh);
-            g.setColour (col::accent);
-            g.fillRoundedRectangle (badge, 4.0f);
-            g.setColour (col::white);
-            g.setFont (badgeFont);
-            g.drawText (TXT ("지연"), badge, juce::Justification::centred, false);
-        }
 
         // 볼륨 라벨 / 값
         if (! plugin)
@@ -269,7 +257,7 @@ public:
         if (off && member.joinFailed)   { status = TXT ("연결 실패 · 네트워크 확인 필요"); statusInk = col::inkSub; }
         else if (off)                   { status = TXT ("연결 끊김 · 재연결 중"); }
         else if (member.pending)        { status = TXT ("연결 중…"); }
-        else if (warn)                  { status = TXT ("지연이 조금 있어요"); statusInk = col::accent; }
+        else if (warn)                  { status = TXT ("지연이 조금 있어요"); statusInk = col::accentText; }
         else if (member.muted)          { status = TXT ("소리 꺼짐"); }
         if (status.isNotEmpty())
         {
@@ -502,7 +490,7 @@ private:
                 {
                     const bool mine = m.kind == MeonSession::ChatMessage::Mine;
                     const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
-                    g.setColour (mine ? col::accent : col::inkSub);
+                    g.setColour (mine ? col::accentText : col::inkSub);
                     g.setFont (Fonts::get (600, plugin ? 12.0f : 13.0f));
                     g.drawText (mine ? TXT ("나") : m.from, juce::Rectangle<int> (pad, y, width, nameH), mine ? juce::Justification::centredRight : juce::Justification::centredLeft, true);
                     const float msgPx = plugin ? 13.0f : 15.0f;
@@ -618,7 +606,7 @@ public:
         repaint();
     }
 
-    void mouseDown (const juce::MouseEvent&) override {}   // 뒤 화면 클릭 막기 (스크림 없음)
+    void mouseDown (const juce::MouseEvent&) override {}   // 뒤 화면 클릭 막기
 
     void resized() override
     {
@@ -639,10 +627,13 @@ public:
     {
         const int padX = plugin ? 24 : 30, padY = plugin ? 22 : 28;
         const float titlePx = plugin ? 19.0f : 22.0f, bodyPx = plugin ? 14.0f : 15.0f;
+        // 스크림: 창 전체를 #1A1A1A 25% 로 덮는다 (반투명 없음 규칙의 유일한 예외)
+        g.fillAll (col::ink.withAlpha (0.25f));
         g.setColour (col::white);
         g.fillRoundedRectangle (card.toFloat(), (float) metric::radiusWindow);
-        g.setColour (col::ink);
+        g.setColour (col::cardBorder);
         g.drawRoundedRectangle (card.toFloat().reduced (0.5f), (float) metric::radiusWindow, 1.0f);
+        g.setColour (col::ink);
 
         const int titleH = (int) std::ceil (Fonts::get (700, titlePx).getHeight());
         g.setFont (Fonts::get (700, titlePx));
@@ -969,6 +960,18 @@ void JamScreen::resized()
         leaveDialog->setBounds (getLocalBounds());
 }
 
+bool JamScreen::serverTextHidden() const
+{
+    return plugin && getWidth() < 800;
+}
+
+juce::String JamScreen::getTooltip()
+{
+    if (serverTextHidden() && serverStatusArea.expanded (4).contains (getMouseXYRelative()))
+        return editor.getSession().getServerStatusText (false);
+    return {};
+}
+
 void JamScreen::paint (juce::Graphics& g)
 {
     ScreenBase::paint (g);
@@ -997,9 +1000,8 @@ void JamScreen::paint (juce::Graphics& g)
     drawSpacedText (g, session.getDisplayRoomCode(), Fonts::get (700, codePx), codePx, plugin ? 0.08f : 0.1f, col::ink,
                     juce::Rectangle<float> (x, (float) topBar.getY(), 400.0f, (float) topBar.getHeight()), juce::Justification::centredLeft);
 
-    // 오른쪽 상태: 서버 핑, 멤버 수
-    const float ping = session.getServerPingMs();
-    juce::String pingText = (plugin ? juce::String() : TXT ("서버 ")) + (ping >= 0.0f ? juce::String ((int) std::lround (ping)) + " ms" : TXT ("— ms"));
+    // 오른쪽 상태: 서버 연결 상태, 멤버 수 (서버 왕복 시간은 합주 지연이 아니므로 숫자를 보이지 않는다)
+    const juce::String srvText = session.getServerStatusText (false);
     juce::String countText = TXT ("멤버 ") + juce::String (session.getMemberCount()) + " / " + juce::String (metric::maxMembers);
     auto f = Fonts::get (500, plugin ? 12.0f : 13.0f);
     g.setFont (f);
@@ -1014,11 +1016,16 @@ void JamScreen::paint (juce::Graphics& g)
     g.setColour (col::inkSub);
     g.drawText (countText, juce::Rectangle<float> (rx - cw, (float) topBar.getY(), cw + 4.0f, (float) topBar.getHeight()), juce::Justification::centredLeft, false);
     rx -= cw + (plugin ? 10.0f : 12.0f);
-    const float pw = f.getStringWidthFloat (pingText);
-    g.drawText (pingText, juce::Rectangle<float> (rx - pw, (float) topBar.getY(), pw + 4.0f, (float) topBar.getHeight()), juce::Justification::centredLeft, false);
+    // 플러그인 창이 800 미만이면 점만 남기고 문구는 툴팁으로
+    const bool dotOnly = serverTextHidden();
+    const float sw = dotOnly ? 0.0f : f.getStringWidthFloat (srvText);
+    if (! dotOnly)
+        g.drawText (srvText, juce::Rectangle<float> (rx - sw, (float) topBar.getY(), sw + 4.0f, (float) topBar.getHeight()), juce::Justification::centredLeft, false);
     const float dot = plugin ? 6.0f : 7.0f;
-    g.setColour (session.isServerConnected() ? col::accent : col::disabled);
-    g.fillEllipse (rx - pw - (plugin ? 6.0f : 7.0f) - dot, (float) topBar.getCentreY() - dot * 0.5f, dot, dot);
+    const float dotX = rx - sw - (dotOnly ? 0.0f : (plugin ? 6.0f : 7.0f)) - dot;
+    g.setColour (col::accent);   // 점은 상태와 관계없이 포인트 색 고정 (디자인 결정)
+    g.fillEllipse (dotX, (float) topBar.getCentreY() - dot * 0.5f, dot, dot);
+    serverStatusArea = juce::Rectangle<float> (dotX, (float) topBar.getY(), rx - dotX, (float) topBar.getHeight()).toNearestInt();
 }
 
 } // namespace meon

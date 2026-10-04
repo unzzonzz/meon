@@ -43,7 +43,7 @@ MeonLookAndFeel::MeonLookAndFeel()
     setColour (juce::TextButton::buttonColourId, col::white);
     setColour (juce::TextButton::buttonOnColourId, col::accent);
     setColour (juce::TextButton::textColourOffId, col::ink);
-    setColour (juce::TextButton::textColourOnId, col::white);
+    setColour (juce::TextButton::textColourOnId, col::onAccent);
 
     setColour (juce::AlertWindow::backgroundColourId, col::white);
     setColour (juce::AlertWindow::textColourId, col::ink);
@@ -161,7 +161,7 @@ void MeonLookAndFeel::drawPopupMenuItemWithOptions (juce::Graphics& g, const juc
     }
 
     // 글자 x 위치는 필드의 글자와 같게 (창 가장자리에서 필드 안쪽 여백만큼). 현재 값은 포인트색 + 세미볼드
-    g.setColour (! item.isEnabled ? col::disabled : (item.isTicked ? col::accent : col::ink));
+    g.setColour (! item.isEnabled ? col::disabled : (item.isTicked ? col::accentText : col::ink));
     g.setFont (Fonts::get (item.isTicked ? 600 : 400, m.fontPx));
     g.drawText (item.text, area.reduced (m.pad, 0), juce::Justification::centredLeft, true);
 }

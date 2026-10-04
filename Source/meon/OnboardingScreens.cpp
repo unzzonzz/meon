@@ -376,7 +376,7 @@ void HeadphoneScreen::CheckRow::paintButton (juce::Graphics& g, bool, bool)
         p.startNewSubPath (cb.getX() + box * 0.26f, cb.getY() + box * 0.52f);
         p.lineTo (cb.getX() + box * 0.44f, cb.getY() + box * 0.70f);
         p.lineTo (cb.getX() + box * 0.76f, cb.getY() + box * 0.32f);
-        g.setColour (col::white);
+        g.setColour (col::onAccent);
         g.strokePath (p, juce::PathStrokeType (2.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
@@ -542,7 +542,7 @@ void InputLevelScreen::updateLabels()
     if (noSignal)
     {
         meterValue.setText (TXT ("신호 없음"));
-        meterValue.setInk (col::accent);
+        meterValue.setInk (col::accentText);
     }
     else
     {
@@ -681,7 +681,7 @@ void InputLevelScreen::paint (juce::Graphics& g)
         p.startNewSubPath (icon.getX() + 6.0f, icon.getY() + 11.5f);
         p.lineTo (icon.getX() + 9.5f, icon.getY() + 15.0f);
         p.lineTo (icon.getX() + 16.0f, icon.getY() + 7.5f);
-        g.setColour (col::white);
+        g.setColour (col::onAccent);
         g.strokePath (p, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setColour (col::ink);
         g.setFont (Fonts::get (500, 15.0f));

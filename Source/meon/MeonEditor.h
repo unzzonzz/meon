@@ -89,6 +89,7 @@ private:
         void timerCallback() override;
     };
     Fader fader;
+    juce::TooltipWindow tooltipWindow { this, 500 };   // 좁은 플러그인 창의 서버 상태 툴팁
 
     std::unique_ptr<juce::Component> screen;
     std::unique_ptr<juce::Component> fadingOut;

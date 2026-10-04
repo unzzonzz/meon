@@ -70,7 +70,7 @@ private:
     enum class State { Idle, Checking, Wrong, Full, Error };
     MeonEditor& editor;
     const bool plugin;
-    MeonButton homeButton, enterButton, newRoomButton;
+    MeonButton homeButton, enterButton;
     CodeInput code;
     State state = State::Idle;
     juce::Rectangle<int> messageArea;

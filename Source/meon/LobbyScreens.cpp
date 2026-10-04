@@ -99,37 +99,32 @@ void HomeScreen::paint (juce::Graphics& g)
     g.drawText (session.getDisplayName() + TXT ("님, 오늘도 좋은 합주 되세요"),
                 juce::Rectangle<int> (centre.getX(), top + logoH + (plugin ? 10 : 14), centre.getWidth(), greetH), juce::Justification::centred, false);
 
-    // 하단: 서버 상태 (참고용 핑)
-    const bool ok = session.isServerConnected();
-    juce::String text;
-    if (ok)
+    // 하단: 서버 상태 (핑 숫자 없음. 플러그인은 호스트 오디오 설정을 간격 두고 덧붙인다)
+    const juce::String text = session.getServerStatusText (true);
+    juce::String hostText;
+    if (plugin)
     {
-        const float ping = session.getServerPingMs();
-        text = TXT ("서버 연결됨 · 핑 ") + (ping >= 0.0f ? juce::String ((int) std::lround (ping)) + " ms" : juce::String (TXT ("측정 중")));
-        if (plugin)
-        {
-            const double sr = editor.getProcessor().getSampleRate();
-            const int bs = editor.getProcessor().getBlockSize();
-            text += TXT (" · ") + editor.getHostDescription() + " " + juce::String (sr / 1000.0, sr >= 1000.0 && std::fmod (sr, 1000.0) == 0.0 ? 0 : 1)
-                    + " kHz / " + juce::String (bs) + TXT (" 샘플");
-        }
-    }
-    else
-    {
-        text = session.getServerState() == MeonSession::ServerState::Connecting ? TXT ("서버에 연결 중…") : TXT ("서버에 연결 중…");
+        const double sr = editor.getProcessor().getSampleRate();
+        const int bs = editor.getProcessor().getBlockSize();
+        hostText = editor.getHostDescription() + " " + juce::String (sr / 1000.0, sr >= 1000.0 && std::fmod (sr, 1000.0) == 0.0 ? 0 : 1)
+                   + " kHz / " + juce::String (bs) + TXT (" 샘플");
     }
 
     auto font = Fonts::get (400, plugin ? 12.0f : 13.0f);
     const float tw = font.getStringWidthFloat (text);
+    const float hostGap = 24.0f;   // [임의] 연결 문구와 호스트 설정 사이 간격
+    const float hw = hostText.isEmpty() ? 0.0f : hostGap + font.getStringWidthFloat (hostText);
     const float dot = 7.0f;
-    const float totalW = dot + 8.0f + tw;
+    const float totalW = dot + 8.0f + tw + hw;
     const float x = (float) footer.getCentreX() - totalW * 0.5f;
     const float cy = (float) footer.getY() + 8.0f;
-    g.setColour (ok ? col::accent : col::disabled);
+    g.setColour (col::accent);   // 점은 상태와 관계없이 포인트 색 고정 (디자인 결정)
     g.fillEllipse (x, cy - dot * 0.5f, dot, dot);
     g.setColour (col::disabled);
     g.setFont (font);
     g.drawText (text, juce::Rectangle<float> (x + dot + 8.0f, (float) footer.getY(), tw + 4.0f, 16.0f), juce::Justification::centredLeft, false);
+    if (hostText.isNotEmpty())
+        g.drawText (hostText, juce::Rectangle<float> (x + dot + 8.0f + tw + hostGap, (float) footer.getY(), hw, 16.0f), juce::Justification::centredLeft, false);
 }
 
 //==============================================================================
@@ -267,7 +262,7 @@ void CreateRoomScreen::paint (juce::Graphics& g)
     if (note.isNotEmpty())
     {
         g.setFont (Fonts::get (400, 13.0f));
-        g.setColour (failed ? col::accent : col::disabled);
+        g.setColour (failed ? col::accentText : col::disabled);
         g.drawText (note, juce::Rectangle<int> (0, enterButton.getBottom() + 16, getWidth(), 16), juce::Justification::centred, false);
     }
 }
@@ -277,7 +272,6 @@ JoinRoomScreen::JoinRoomScreen (MeonEditor& e)
     : editor (e), plugin (e.isPluginMode()),
       homeButton (TXT ("← 홈")),
       enterButton (TXT ("입장하기"), MeonButton::Style::Primary),
-      newRoomButton (TXT ("새 방 만들기")),
       code (e.isPluginMode() ? 56 : 68, e.isPluginMode() ? 68 : 84, e.isPluginMode() ? 10 : 12, e.isPluginMode() ? 30.0f : 36.0f)
 {
     homeButton.setFont (13.0f, 500);
@@ -289,20 +283,12 @@ JoinRoomScreen::JoinRoomScreen (MeonEditor& e)
     enterButton.setBadgeMetrics (plugin ? 20.0f : 22.0f, 11.0f, plugin ? 9.0f : 10.0f);
     enterButton.onClick = [this] { submit(); };
 
-    newRoomButton.setFont (plugin ? 12.0f : 13.0f, 500);
-    newRoomButton.onClick = [this]
-    {
-        editor.getSession().createRoom();
-        editor.go (MeonEditor::Screen::Create);
-    };
-
     code.onChanged = [this] { if (state != State::Checking) state = State::Idle; updateState(); };
     code.onSubmit = [this] { submit(); };
 
     addAndMakeVisible (homeButton);
     addAndMakeVisible (code);
     addAndMakeVisible (enterButton);
-    addChildComponent (newRoomButton);
 
     editor.getSession().addListener (this);
     updateState();
@@ -356,7 +342,6 @@ void JoinRoomScreen::updateState()
 {
     code.setErrorState (state == State::Wrong || state == State::Full || state == State::Error);
     enterButton.setEnabled (code.isComplete() && state != State::Checking && editor.getSession().isServerConnected());
-    newRoomButton.setVisible (state == State::Full);
     resized();
     repaint();
 }
@@ -382,19 +367,6 @@ void JoinRoomScreen::resized()
     messageArea = juce::Rectangle<int> (r.getX(), y, r.getWidth(), msgH);
     y += msgH + (plugin ? 0 : 8);
     enterButton.setBounds (cx - enterW / 2, y, enterW, enterH);
-
-    if (newRoomButton.isVisible())
-    {
-        // 메시지 상자 안 오른쪽에 버튼
-        const float px = plugin ? 14.0f : 15.0f;
-        auto font = Fonts::get (500, px);
-        const int iconSz = plugin ? 18 : 20, padX = plugin ? 18 : 20, gap = plugin ? 12 : 14;
-        const int textW = (int) std::ceil (font.getStringWidthFloat (TXT ("이 방은 5명이 모두 찼어요")));
-        const int btnW = newRoomButton.getIdealWidth (plugin ? 11 : 12), btnH = plugin ? 28 : 30;
-        const int boxW = padX * 2 + iconSz + gap + textW + gap + btnW;
-        const int boxX = cx - boxW / 2;
-        newRoomButton.setBounds (boxX + boxW - padX - btnW, messageArea.getCentreY() - btnH / 2, btnW, btnH);
-    }
 }
 
 void JoinRoomScreen::paint (juce::Graphics& g)
@@ -435,10 +407,8 @@ void JoinRoomScreen::paint (juce::Graphics& g)
     const int iconSz = plugin ? 18 : 20, padX = plugin ? 18 : 20, padY = plugin ? 12 : 14;
     const int gap = state == State::Full ? (plugin ? 12 : 14) : (plugin ? 10 : 12);
     const int textW = (int) std::ceil (font.getStringWidthFloat (text));
-    int boxW = padX * 2 + iconSz + gap + textW;
-    if (state == State::Full)
-        boxW += gap + newRoomButton.getWidth();
-    const int boxH = padY * 2 + (int) std::ceil (font.getHeight()) + (state == State::Full ? 6 : 0);
+    const int boxW = padX * 2 + iconSz + gap + textW;
+    const int boxH = padY * 2 + (int) std::ceil (font.getHeight());
     juce::Rectangle<float> box ((float) (messageArea.getCentreX() - boxW / 2), (float) (messageArea.getCentreY() - boxH / 2), (float) boxW, (float) boxH);
     g.setColour (col::warnBg);
     g.fillRoundedRectangle (box, (float) metric::radiusCard);
@@ -448,7 +418,7 @@ void JoinRoomScreen::paint (juce::Graphics& g)
     juce::Rectangle<float> icon (box.getX() + (float) padX, box.getCentreY() - (float) iconSz * 0.5f, (float) iconSz, (float) iconSz);
     g.setColour (col::accent);
     g.fillRoundedRectangle (icon, 4.0f);
-    g.setColour (col::white);
+    g.setColour (col::onAccent);
     g.setFont (Fonts::get (700, plugin ? 12.0f : 13.0f));
     g.drawText ("!", icon, juce::Justification::centred, false);
 

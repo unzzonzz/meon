@@ -54,6 +54,7 @@ MeonSession::MeonSession (SonobusAudioProcessor& p, MeonSettings& s, bool plugin
     if (processor.isConnectedToServer())
     {
         serverState = ServerState::Connected;
+        everConnected = true;
         wantConnected = true;
         userName = processor.getCurrentUsername();
         const auto group = processor.getCurrentJoinedGroup();
@@ -250,6 +251,7 @@ void MeonSession::applyNicknameChange()
         processor.disconnectFromServer();
         serverState = ServerState::Disconnected;
     }
+    everConnected = false;
     nextConnectAttemptMs = 0.0;
     start();
 }
@@ -268,6 +270,16 @@ void MeonSession::connectNow()
         nextConnectAttemptMs = juce::Time::getMillisecondCounterHiRes() + 3000.0;
     }
     listeners.call ([] (Listener& l) { l.sessionStateChanged(); });
+}
+
+juce::String MeonSession::getServerStatusText (bool home) const
+{
+    // 서버는 멤버를 찾아 주기만 한다 (소리는 멤버끼리 직접). 왕복 시간은 합주 지연으로 오해되므로 표시하지 않는다.
+    if (isServerConnected())
+        return TXT ("서버 연결됨");
+    if (isServerLost())
+        return home ? TXT ("서버 연결 끊김 · 재연결 중…") : TXT ("서버 재연결 중…");
+    return TXT ("서버에 연결 중…");
 }
 
 float MeonSession::getServerPingMs() const
@@ -639,6 +651,7 @@ void MeonSession::handleEvent (const Event& e)
             {
                 const bool wasInRoom = roomState == RoomState::InRoom;
                 serverState = ServerState::Connected;
+                everConnected = true;
                 if (wasInRoom && log.isActive())
                     log.addEvent ("serverReconnected", "");
                 listeners.call ([] (Listener& l) { l.sessionStateChanged(); });

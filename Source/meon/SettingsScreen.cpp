@@ -21,7 +21,7 @@ void SettingsScreen::LinkLabel::paintButton (juce::Graphics& g, bool over, bool)
 {
     auto font = Fonts::get (400, px);
     g.setFont (font);
-    g.setColour (over ? col::accentDown : col::accent);
+    g.setColour (over ? col::ink : col::accentText);
     g.drawText (text, getLocalBounds(), juce::Justification::centredLeft, false);
     if (over)
         g.fillRect (0, getHeight() - 2, getIdealWidth() - 2, 1);

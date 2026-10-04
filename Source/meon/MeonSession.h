@@ -75,6 +75,10 @@ public:
     void applyNicknameChange();              // 설정에서 닉네임 바꾼 뒤 (방 밖에서만 즉시 재연결)
     ServerState getServerState() const { return serverState; }
     bool isServerConnected() const { return serverState == ServerState::Connected; }
+    /** 한 번 연결됐다가 끊겨 재연결을 기다리는 중 (연결 중 상태 포함) */
+    bool isServerLost() const { return serverState != ServerState::Connected && everConnected; }
+    /** 화면 표시용 서버 상태 문구. home = 홈 하단, 아니면 합주 상단 바 */
+    juce::String getServerStatusText (bool home) const;
     float getServerPingMs() const;           // < 0 이면 미측정
     void setServerPingInterval (int ms);
     juce::String getServerHost() const { return DEFAULT_SERVER_HOST; }
@@ -153,6 +157,7 @@ private:
     ServerState serverState = ServerState::Disconnected;
     RoomState roomState = RoomState::None;
     bool wantConnected = false;
+    bool everConnected = false;   // 닉네임 변경 등으로 직접 끊을 때는 다시 false
     bool creatingRoom = false;
     bool joinRequested = false;
     bool reattached = false;

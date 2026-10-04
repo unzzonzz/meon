@@ -72,9 +72,9 @@ void MeonButton::paintButton (juce::Graphics& g, bool over, bool down)
     {
         case Style::Primary:
             bg = ! enabled ? col::disabled : (hot ? col::accentDown : col::accent);
-            ink = col::white; border = juce::Colours::transparentBlack;
-            badgeBorder = col::white; badgeBg = bg; badgeInk = col::white;
-            subInk = col::white;
+            ink = enabled ? col::onAccent : col::white; border = juce::Colours::transparentBlack;
+            badgeBorder = ink; badgeBg = bg; badgeInk = ink;
+            subInk = ink;
             break;
         case Style::Dark:
             bg = ! enabled ? col::disabled : col::ink;
@@ -96,7 +96,7 @@ void MeonButton::paintButton (juce::Graphics& g, bool over, bool down)
     {
         bg = (hot && ! oHover.isTransparent()) ? oHover : oBg;
         ink = oInk; border = oBorder;
-        if (style != Style::Secondary) { badgeBorder = col::white; badgeBg = bg; badgeInk = ink; }
+        if (style != Style::Secondary) { badgeBorder = ink; badgeBg = bg; badgeInk = ink; }
     }
 
     g.setColour (bg);
@@ -269,7 +269,7 @@ void MeonCheckbox::paintButton (juce::Graphics& g, bool, bool)
         p.startNewSubPath (r.getX() + w * 0.26f, r.getY() + w * 0.52f);
         p.lineTo (r.getX() + w * 0.44f, r.getY() + w * 0.70f);
         p.lineTo (r.getX() + w * 0.76f, r.getY() + w * 0.32f);
-        g.setColour (col::white);
+        g.setColour (col::onAccent);
         g.strokePath (p, juce::PathStrokeType (2.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 }
@@ -328,7 +328,7 @@ void WarningBox::paint (juce::Graphics& g)
     juce::Rectangle<float> icon ((float) padX, (float) padY, (float) iconSize, (float) iconSize);
     g.setColour (col::accent);
     g.fillRoundedRectangle (icon, 4.0f);
-    g.setColour (col::white);
+    g.setColour (col::onAccent);
     g.setFont (Fonts::get (700, 14.0f));
     g.drawText ("!", icon, juce::Justification::centred, false);
 

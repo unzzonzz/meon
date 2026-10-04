@@ -1,5 +1,5 @@
 // MEON - 디자인 토큰 (색, 글꼴, 치수)
-// 값은 디자인 명세(MEON.dc.html 공통 스펙)에서 그대로 가져온다. 임의로 추가한 값은 주석에 [임의] 표시.
+// 값은 디자인 명세(MEON Yellow.dc.html 공통 스펙)에서 그대로 가져온다. 임의로 추가한 값은 주석에 [임의] 표시.
 #pragma once
 
 #include <JuceHeader.h>
@@ -12,10 +12,12 @@ namespace meon
 
 namespace col
 {
-    const juce::Colour accent      { 0xFFFF5A3Du };  // 포인트 (유일한 컬러)
-    const juce::Colour accentDown  { 0xFFE44A2Fu };  // 포인트 눌림
-    const juce::Colour warnBg      { 0xFFFFEDE9u };  // 경고 배경
-    const juce::Colour warnBorder  { 0xFFF5CEC5u };  // 경고 테두리
+    const juce::Colour accent      { 0xFFFFD700u };  // 포인트 (유일한 컬러, 노랑 시안)
+    const juce::Colour accentDown  { 0xFFEBC600u };  // 포인트 눌림
+    const juce::Colour accentText  { 0xFF8F7200u };  // 흰 바탕 위 포인트 색 글자 (노랑 대비 보정)
+    const juce::Colour onAccent    { 0xFF1A1A1Au };  // 노랑 면 위 글자·아이콘
+    const juce::Colour warnBg      { 0xFFFFF8D6u };  // 경고 배경
+    const juce::Colour warnBorder  { 0xFFF0DE8Au };  // 경고 테두리
     const juce::Colour ink         { 0xFF1A1A1Au };  // 본문 텍스트
     const juce::Colour inkSub      { 0xFF767676u };  // 보조 텍스트
     const juce::Colour inkBody     { 0xFF4A4A4Au };  // 본문(설명) 텍스트

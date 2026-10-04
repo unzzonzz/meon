@@ -8,6 +8,7 @@ namespace meon
 {
 
 class JamScreen : public ScreenBase,
+                  public juce::TooltipClient,
                   private MeonSession::Listener,
                   private juce::Timer
 {
@@ -19,6 +20,7 @@ public:
     bool confirmLeaveForQuit() override;
     void resized() override;
     void paint (juce::Graphics&) override;
+    juce::String getTooltip() override;
 
     MeonEditor& getEditor() { return editor; }
     bool isPlugin() const { return plugin; }
@@ -55,12 +57,14 @@ private:
     bool quitAfterLeave = false;
     double lastTickMs = 0.0;
     juce::Rectangle<int> topBar;
+    juce::Rectangle<int> serverStatusArea;   // 상단 바의 서버 점·문구 (툴팁 위치)
 
     void rebuildCards();
     void updateCards();
     void setChatOpen (bool open);
     bool effectiveChatOpen() const;
     void showLeaveDialog (bool quit);
+    bool serverTextHidden() const;
 
     void membersChanged() override { rebuildCards(); }
     void memberStatsChanged() override { updateCards(); }
