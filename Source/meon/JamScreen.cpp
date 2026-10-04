@@ -459,7 +459,7 @@ private:
     class List : public juce::Component
     {
     public:
-        explicit List (JamScreen& o) : owner (o), plugin (o.isPlugin()) { setInterceptsMouseClicks (false, false); }
+        explicit List (JamScreen& o) : owner (o), plugin (o.isPlugin()) { setInterceptsMouseClicks (true, false); }   // 휠·트랙패드 스크롤이 Viewport 로 가려면 목록이 마우스를 받아야 한다
 
         void rebuild (int width)
         {
