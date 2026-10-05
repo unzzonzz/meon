@@ -1,0 +1,69 @@
+# Windows 빌드: main 에 push 할 때마다 MEON 설치 프로그램(.exe)을 만든다.
+# - 실행 결과 페이지의 Artifacts 에서 받을 수 있고,
+# - main 빌드는 'windows-latest' 프리릴리스에도 올라가서 항상 같은 주소로 최신 설치 파일을 받을 수 있다:
+#   https://github.com/unzzonzz/meon/releases/download/windows-latest/MEON-Installer.exe
+name: Windows build
+
+on:
+  push:
+    branches: [main, windows-build]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ASIO SDK 받기
+        run: |
+          curl -sSL -o asiosdk.zip https://www.steinberg.net/asiosdk
+          unzip -q asiosdk.zip -d asiotmp
+          ASIODIR=$(dirname "$(dirname "$(find asiotmp -path '*common/iasiodrv.h' | head -1)")")
+          mv "$ASIODIR" ../asiosdk
+          ls ../asiosdk/common/iasiodrv.h
+
+      - name: 버전
+        id: ver
+        run: |
+          V=$(sed -n 's/^project(MEON VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: CMake 구성
+        run: cmake -G "Visual Studio 17 2022" -A x64 -B build
+
+      - name: 빌드
+        run: cmake --build build --config Release --parallel --target MEON_Standalone MEON_VST3
+
+      - name: Inno Setup 설치
+        run: |
+          if [ ! -f "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then choco install innosetup -y --no-progress; fi
+
+      - name: 설치 프로그램 만들기
+        working-directory: release
+        run: ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ./distwin.sh ${{ steps.ver.outputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MEON-${{ steps.ver.outputs.version }}-windows-${{ github.run_number }}
+          path: release/instoutput/*.exe
+
+      - name: windows-latest 프리릴리스 갱신
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp release/instoutput/MEON-*-Installer.exe MEON-Installer.exe
+          NOTES="main $(git rev-parse --short HEAD) 빌드 (v${{ steps.ver.outputs.version }}, run ${{ github.run_number }})"
+          gh release delete windows-latest --yes --cleanup-tag || true
+          gh release create windows-latest MEON-Installer.exe --prerelease --target "$GITHUB_SHA" \
+            --title "MEON Windows (최신 main 빌드)" --notes "$NOTES"
