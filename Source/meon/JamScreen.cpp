@@ -526,59 +526,82 @@ private:
 };
 
 //==============================================================================
-class JamScreen::ChatRail : public juce::Component
+/** 채팅을 접었을 때 멤버 아래에 나오는 최신 메시지 한 줄. 누르면 채팅이 열린다 (마우스로 여는 유일한 곳, 단축키 C). */
+class JamScreen::ChatPeek : public juce::Button
 {
 public:
-    explicit ChatRail (JamScreen& o) : owner (o), plugin (o.isPlugin()), button ("C")
+    explicit ChatPeek (JamScreen& o) : juce::Button ("chatPeek"), owner (o), plugin (o.isPlugin())
     {
-        button.setFont (plugin ? 11.0f : 12.0f, 600);
-        button.setColourOverride (col::white, col::inkBody, col::border, col::panel);
-        button.onClick = [this] { owner.toggleChat(); };
-        addAndMakeVisible (button);
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
+        setWantsKeyboardFocus (false);
+        onClick = [this] { owner.toggleChat(); };
     }
 
-    void setUnread (bool u) { unread = u; repaint(); }
+    static int height (bool plugin) { return plugin ? 36 : 44; }
 
-    void resized() override
+    void paintButton (juce::Graphics& g, bool over, bool down) override
     {
-        const int sz = plugin ? 30 : 36;
-        button.setBounds (getWidth() / 2 - sz / 2, plugin ? 12 : 14, sz, sz);
-    }
-
-    void paint (juce::Graphics& g) override
-    {
-        g.fillAll (col::white);
+        auto r = getLocalBounds().toFloat();
+        g.setColour ((over || down) && ! plugin ? juce::Colour (0xFFEEEEEEu) : col::panel);
+        g.fillRoundedRectangle (r, (float) metric::radiusCard);
         g.setColour (col::cardBorder);
-        g.fillRect (0, 0, 1, getHeight());
+        g.drawRoundedRectangle (r.reduced (0.5f), (float) metric::radiusCard, 1.0f);
 
-        const int gap = plugin ? 8 : 10;
-        auto font = Fonts::get (500, plugin ? 12.0f : 13.0f);
-        const juce::String text = TXT ("채팅");
-        const float tw = font.getStringWidthFloat (text) + 4.0f;
-        const float th = font.getHeight();
-        // 세로 쓰기 (writing-mode: vertical-rl)
-        juce::Graphics::ScopedSaveState ss (g);
-        const float cx = (float) getWidth() * 0.5f;
-        const float top = (float) (button.getBottom() + gap);
-        g.addTransform (juce::AffineTransform::rotation (juce::MathConstants<float>::halfPi, cx, top));
-        g.setColour (col::inkSub);
-        g.setFont (font);
-        g.drawText (text, juce::Rectangle<float> (cx, top - th * 0.5f, tw + 8.0f, th), juce::Justification::centredLeft, false);
-        ss.~ScopedSaveState();
+        const float padX = plugin ? 12.0f : 16.0f, gap = plugin ? 10.0f : 12.0f;
+        auto inner = r.reduced (padX, 0.0f);
 
-        if (unread)
+        // 시스템 메시지는 건너뛰고 가장 최근 대화 한 줄
+        const MeonSession::ChatMessage* last = nullptr;
+        const auto& msgs = owner.getEditor().getSession().getChat();
+        for (auto it = msgs.rbegin(); it != msgs.rend(); ++it)
+            if (it->kind != MeonSession::ChatMessage::System) { last = &*it; break; }
+
+        // 오른쪽: 시간 (· 눌러서 채팅 열기)
+        auto hintFont = Fonts::get (400, plugin ? 11.0f : 12.0f);
+        juce::String hint = last != nullptr ? relativeTime (last->time) : juce::String();
+        if (! plugin)
+            hint = hint.isEmpty() ? TXT ("눌러서 채팅 열기") : hint + TXT (" · 눌러서 채팅 열기");
+        if (hint.isNotEmpty())
         {
-            const float d = plugin ? 7.0f : 8.0f;
-            g.setColour (col::accent);
-            g.fillEllipse ((float) getWidth() * 0.5f - d * 0.5f, top + tw + 8.0f + (float) gap, d, d);
+            const float hw = hintFont.getStringWidthFloat (hint) + 2.0f;
+            g.setColour (col::disabled);
+            g.setFont (hintFont);
+            g.drawText (hint, inner.removeFromRight (hw), juce::Justification::centredRight, false);
+            inner.removeFromRight (gap);
         }
+
+        if (last == nullptr)
+        {
+            g.setColour (col::disabled);
+            g.setFont (Fonts::get (400, plugin ? 14.0f : 15.0f));
+            g.drawText (TXT ("아직 채팅이 없어요"), inner, juce::Justification::centredLeft, true);
+            return;
+        }
+
+        auto nameFont = Fonts::get (600, plugin ? 13.0f : 14.0f);
+        const juce::String name = last->kind == MeonSession::ChatMessage::Mine ? TXT ("나") : last->from;
+        const float nw = juce::jmin (nameFont.getStringWidthFloat (name) + 2.0f, inner.getWidth() * 0.4f);
+        g.setColour (col::inkSub);
+        g.setFont (nameFont);
+        g.drawText (name, inner.removeFromLeft (nw), juce::Justification::centredLeft, true);
+        inner.removeFromLeft (gap);
+
+        g.setColour (col::ink);
+        g.setFont (Fonts::get (400, plugin ? 14.0f : 15.0f));
+        g.drawText (last->text.replaceCharacters ("\r\n", "  "), inner, juce::Justification::centredLeft, true);   // 넘치면 말줄임
     }
 
 private:
+    static juce::String relativeTime (const juce::Time& t)
+    {
+        const auto mins = (int) ((juce::Time::getCurrentTime() - t).inMinutes());
+        if (mins < 1)  return TXT ("방금");
+        if (mins < 60) return juce::String (mins) + TXT ("분 전");
+        return juce::String (mins / 60) + TXT ("시간 전");
+    }
+
     JamScreen& owner;
     const bool plugin;
-    MeonButton button;
-    bool unread = false;
 };
 
 //==============================================================================
@@ -629,10 +652,8 @@ public:
         const float titlePx = plugin ? 19.0f : 22.0f, bodyPx = plugin ? 14.0f : 15.0f;
         // 스크림: 창 전체를 #1A1A1A 25% 로 덮는다 (반투명 없음 규칙의 유일한 예외)
         g.fillAll (col::ink.withAlpha (0.25f));
-        g.setColour (col::white);
+        g.setColour (col::white);   // 테두리 없음. 스크림만으로 화면과 구분한다
         g.fillRoundedRectangle (card.toFloat(), (float) metric::radiusWindow);
-        g.setColour (col::cardBorder);
-        g.drawRoundedRectangle (card.toFloat().reduced (0.5f), (float) metric::radiusWindow, 1.0f);
         g.setColour (col::ink);
 
         const int titleH = (int) std::ceil (Fonts::get (700, titlePx).getHeight());
@@ -682,8 +703,8 @@ JamScreen::JamScreen (MeonEditor& e)
     addChildComponent (*alone);
     chat = std::make_unique<ChatPanel> (*this);
     addChildComponent (*chat);
-    rail = std::make_unique<ChatRail> (*this);
-    addChildComponent (*rail);
+    chatPeek = std::make_unique<ChatPeek> (*this);
+    addChildComponent (*chatPeek);
 
     chatOpen = editor.getSettings().isChatOpen();
     editor.getSession().addListener (this);
@@ -699,27 +720,40 @@ JamScreen::~JamScreen()
     editor.getSession().removeListener (this);
 }
 
+bool JamScreen::isNarrow() const
+{
+    return plugin && getWidth() > 0 && getWidth() < 800;
+}
+
 bool JamScreen::effectiveChatOpen() const
 {
-    if (plugin && getWidth() > 0 && getWidth() < 800)
-        return false;
+    // 플러그인 창 폭이 800 미만이면 자동으로 접힌다. 그 상태에서 직접 열면 넓어질 때까지만 열어 둔다.
+    if (isNarrow())
+        return narrowChatOpen;
     return chatOpen;
 }
 
 void JamScreen::setChatOpen (bool open)
 {
-    chatOpen = open;
-    editor.getSettings().setChatOpen (open);
-    if (open)
+    if (isNarrow())
+    {
+        narrowChatOpen = open;
+    }
+    else
+    {
+        chatOpen = open;
+        editor.getSettings().setChatOpen (open);
+    }
+    if (effectiveChatOpen())
         editor.getSession().markChatRead();
     resized();
     chat->refresh();
-    rail->setUnread (false);
+    chatPeek->repaint();
 }
 
 void JamScreen::toggleChat()
 {
-    setChatOpen (! chatOpen);
+    setChatOpen (! effectiveChatOpen());
 }
 
 void JamScreen::chatChanged()
@@ -727,8 +761,7 @@ void JamScreen::chatChanged()
     chat->refresh();
     if (effectiveChatOpen())
         editor.getSession().markChatRead();
-    else
-        rail->setUnread (editor.getSession().getUnreadCount() > 0);
+    chatPeek->repaint();
 }
 
 void JamScreen::sendChatText (const juce::String& text)
@@ -898,6 +931,11 @@ void JamScreen::timerCallback()
     me->pushLevel (session.getMySendLevelDb(), dt, now);
     for (auto* card : cards)
         card->pushLevel (session.getMemberLevelDb (card->getSlot()), dt);
+    if (chatPeek->isVisible() && now - lastPeekRepaintMs > 15000.0)   // "방금 / N분 전" 갱신
+    {
+        lastPeekRepaintMs = now;
+        chatPeek->repaint();
+    }
 }
 
 void JamScreen::resized()
@@ -913,6 +951,11 @@ void JamScreen::resized()
     leaveButton.setBounds (topBar.getRight() - padX - leaveW, topBar.getCentreY() - btnH / 2, leaveW, btnH);
     settingsButton.setBounds (leaveButton.getX() - (plugin ? 10 : 12) - setW, topBar.getCentreY() - btnH / 2, setW, btnH);
 
+    // 채팅을 접으면 멤버 아래에 최신 메시지 한 줄 (상단 바에는 채팅 버튼 없음)
+    if (isNarrow() != narrowSeen) { narrowSeen = isNarrow(); narrowChatOpen = false; }   // 폭 기준을 넘나들면 다시 자동 접힘
+    const bool open = effectiveChatOpen();
+    chatPeek->setVisible (! open);
+
     const float logoPx = plugin ? 15.0f : 17.0f;
     int x = topBar.getX() + padX + (int) std::ceil (logoWidth (logoPx, 0.18f)) + (plugin ? 14 : 20) + 1 + (plugin ? 14 : 20);
     if (! plugin)
@@ -922,17 +965,18 @@ void JamScreen::resized()
     const int copyH = plugin ? 26 : 30;
     copyButton.setBounds (x, topBar.getCentreY() - copyH / 2, copyButton.getIdealWidth (plugin ? 10 : 12), copyH);
 
-    // 오른쪽: 채팅 패널 또는 레일
-    const bool open = effectiveChatOpen();
+    // 오른쪽: 채팅 패널 (접으면 완전히 사라지고 멤버 영역이 전체 폭을 쓴다)
     chat->setVisible (open);
-    rail->setVisible (! open);
     if (open)
         chat->setBounds (r.removeFromRight (plugin ? 240 : 320));
-    else
-        rail->setBounds (r.removeFromRight (plugin ? 46 : 56));
 
     auto main = r.reduced (plugin ? 14 : 20);
     const int gap = plugin ? 12 : 16;
+    if (! open)
+    {
+        chatPeek->setBounds (main.removeFromBottom (ChatPeek::height (plugin)));
+        main.removeFromBottom (gap);
+    }
     const int meH = plugin ? 12 * 2 + 42 : 18 * 2 + 52;
     me->setBounds (main.removeFromTop (meH));
     main.removeFromTop (gap);

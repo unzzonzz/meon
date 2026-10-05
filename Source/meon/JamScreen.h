@@ -39,7 +39,7 @@ private:
     class EmptySlot;
     class AlonePanel;
     class ChatPanel;
-    class ChatRail;
+    class ChatPeek;
     class LeaveDialog;
 
     MeonEditor& editor;
@@ -50,12 +50,13 @@ private:
     juce::OwnedArray<MemberCard> cards;
     juce::OwnedArray<EmptySlot> empties;
     std::unique_ptr<ChatPanel> chat;
-    std::unique_ptr<ChatRail> rail;
+    std::unique_ptr<ChatPeek> chatPeek;
     std::unique_ptr<LeaveDialog> leaveDialog;
     std::unique_ptr<LeaveDialog> dialogTrash;   // 버튼 콜백 안에서 지우지 않도록 다음 틱에 삭제
     bool chatOpen = true;
+    bool narrowChatOpen = false, narrowSeen = false;   // 좁은 플러그인 창에서 직접 연 경우 (저장하지 않음)
     bool quitAfterLeave = false;
-    double lastTickMs = 0.0;
+    double lastTickMs = 0.0, lastPeekRepaintMs = 0.0;
     juce::Rectangle<int> topBar;
     juce::Rectangle<int> serverStatusArea;   // 상단 바의 서버 점·문구 (툴팁 위치)
 
@@ -63,6 +64,7 @@ private:
     void updateCards();
     void setChatOpen (bool open);
     bool effectiveChatOpen() const;
+    bool isNarrow() const;
     void showLeaveDialog (bool quit);
     bool serverTextHidden() const;
 
