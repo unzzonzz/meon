@@ -347,10 +347,14 @@ void AudioDeviceScreen::layoutBody (juce::Rectangle<int> body)
 {
     const int w = 680;
     int y = body.getY();
+    // Windows: 드라이버 줄이 하나 더 있으므로 간격을 줄여 한 화면에 들어가게 한다
+    const bool compact = driverCombo.isVisible();
+    const int comboH = compact ? 44 : 48;
+    const int rowGap = compact ? 14 : 20;
 
     if (warning.isVisible())
     {
-        y += 28;
+        y += compact ? 20 : 28;
         const int h = warning.getPreferredHeight (w);
         warning.setBounds (body.getX(), y, w, h);
         const int bx = warning.getTextLeft();
@@ -360,16 +364,16 @@ void AudioDeviceScreen::layoutBody (juce::Rectangle<int> body)
         y += h;
     }
 
-    y += 32;
-    if (driverCombo.isVisible())
+    y += compact ? 22 : 32;
+    if (compact)
     {
         driverLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
-        driverCombo.setBounds (body.getX(), y, w, 48); y += 48 + 20;
+        driverCombo.setBounds (body.getX(), y, w, comboH); y += comboH + rowGap;
     }
     inLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
-    inCombo.setBounds (body.getX(), y, w, 48); y += 48 + 20;
+    inCombo.setBounds (body.getX(), y, w, comboH); y += comboH + rowGap;
     outLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
-    outCombo.setBounds (body.getX(), y, w, 48); y += 48 + 20;
+    outCombo.setBounds (body.getX(), y, w, comboH); y += comboH + rowGap;
     bufLabel.setBounds (body.getX(), y, 200, 16);
     bufHint.setBounds (body.getX() + 200, y, w - 200, 16); y += 16 + 8;
 
