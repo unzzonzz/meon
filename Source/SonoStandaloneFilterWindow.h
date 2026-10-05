@@ -36,6 +36,7 @@
 
 // HACK
 #include "meon/MeonEditor.h"
+#include "meon/MeonAudio.h"
 
 #include <limits>
 #include <algorithm>
@@ -126,8 +127,8 @@ public:
     void init (bool enableAudioInput, const String& preferredDefaultDeviceName)
     {
 #if JUCE_WINDOWS
-        // use ASIO as default.. the options will override
-        deviceManager.setCurrentAudioDeviceType("ASIO", false);
+        // 기본 드라이버: ASIO 장치가 있으면 ASIO, 없으면 Windows 저지연 (저장된 설정이 있으면 그것을 따른다)
+        deviceManager.setCurrentAudioDeviceType (meon::audio::preferredDriverType (deviceManager), false);
 #endif
         setupAudioDevices (enableAudioInput, preferredDefaultDeviceName, options.get());
         reloadPluginState();

@@ -296,6 +296,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/meon/JamScreen.h
         Source/meon/SettingsScreen.cpp
         Source/meon/SettingsScreen.h
+        Source/meon/MeonAudio.cpp
+        Source/meon/MeonAudio.h
     )
     set(AOOSourceFiles        
         deps/aoo/lib/src/SLIP.hpp
@@ -434,11 +436,24 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         configure_file("${CMAKE_CURRENT_SOURCE_DIR}/images/icons/MEON.ico" "${meon_gen_dir}/icon.ico" COPYONLY)
     endif()
 
+    # Windows: JUCE 7 의 GDI 글꼴 경로는 CFF(.otf) 곡선(3차 베지어)을 그리지 못하므로
+    # Pretendard 공식 배포본의 TrueType 판(public/static/alternative)을 쓴다.
+    if (WIN32)
+        set (MEON_FONT_FILES
+            Source/fonts/win/Pretendard-Regular.ttf
+            Source/fonts/win/Pretendard-Medium.ttf
+            Source/fonts/win/Pretendard-SemiBold.ttf
+            Source/fonts/win/Pretendard-Bold.ttf)
+    else()
+        set (MEON_FONT_FILES
+            Source/fonts/Pretendard-Regular.otf
+            Source/fonts/Pretendard-Medium.otf
+            Source/fonts/Pretendard-SemiBold.otf
+            Source/fonts/Pretendard-Bold.otf)
+    endif()
+
     juce_add_binary_data("${target_name}_SBData" SOURCES
-        Source/fonts/Pretendard-Regular.otf
-        Source/fonts/Pretendard-Medium.otf
-        Source/fonts/Pretendard-SemiBold.otf
-        Source/fonts/Pretendard-Bold.otf
+        ${MEON_FONT_FILES}
         images/bar_click.wav
         images/beat_click.wav
         images/lgc_bar.wav

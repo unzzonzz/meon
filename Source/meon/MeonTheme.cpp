@@ -7,10 +7,24 @@ static FontCache* gFontCache = nullptr;
 
 FontCache::FontCache()
 {
+#if JUCE_WINDOWS
+    // JUCE 7 의 Windows 메모리 글꼴은 이름표 4번(전체 이름)으로 GDI 에서 다시 찾는다.
+    // Medium/SemiBold 는 전체 이름이 곧 패밀리 이름이라 그대로 되지만, Regular/Bold 는
+    // 'Pretendard Regular'/'Pretendard Bold' 라는 패밀리가 없어서 다른 글꼴로 대체된다.
+    // 그래서 네 파일을 모두 프로세스에 등록해 둔 채로(memoryFonts 가 살아 있는 동안 유지),
+    // Regular/Bold 는 패밀리 'Pretendard' + 스타일로 다시 만든다.
+    memoryFonts.add (juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardRegular_ttf,  BinaryData::PretendardRegular_ttfSize));
+    memoryFonts.add (juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardBold_ttf,     BinaryData::PretendardBold_ttfSize));
+    medium   = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardMedium_ttf,   BinaryData::PretendardMedium_ttfSize);
+    semiBold = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardSemiBold_ttf, BinaryData::PretendardSemiBold_ttfSize);
+    regular  = juce::Typeface::createSystemTypefaceFor (juce::Font ("Pretendard", "Regular", 16.0f));
+    bold     = juce::Typeface::createSystemTypefaceFor (juce::Font ("Pretendard", "Bold", 16.0f));
+#else
     regular  = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardRegular_otf,  BinaryData::PretendardRegular_otfSize);
     medium   = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardMedium_otf,   BinaryData::PretendardMedium_otfSize);
     semiBold = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardSemiBold_otf, BinaryData::PretendardSemiBold_otfSize);
     bold     = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardBold_otf,     BinaryData::PretendardBold_otfSize);
+#endif
     gFontCache = this;
 }
 

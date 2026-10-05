@@ -3,6 +3,7 @@
 
 #include "MeonEditor.h"
 #include "MeonWidgets.h"
+#include "MeonAudio.h"
 
 namespace meon
 {
@@ -45,7 +46,8 @@ private:
 
         SettingsScreen& owner;
         const bool plugin;
-        juce::ComboBox inCombo, outCombo, bufCombo;
+        juce::ComboBox driverCombo, inCombo, outCombo, bufCombo;
+        MeonButton driverPanelButton;
         LevelBar meter;
         MeonTextEditor nickInput;
         MeonButton saveButton, logButton;
@@ -57,6 +59,8 @@ private:
         juce::Rectangle<int> audioPanel;
         bool updating = false;
         juce::Array<int> bufferChoices;
+        juce::StringArray driverChoices;
+        void applyDriver();
         void applyDevices();
         void applyBuffer();
         void saveNickname();

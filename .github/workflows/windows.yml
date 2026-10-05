@@ -44,6 +44,22 @@ jobs:
       - name: 빌드
         run: cmake --build build --config Release --parallel --target MEON_Standalone MEON_VST3
 
+      - name: 화면 확인용 스냅숏
+        continue-on-error: true
+        run: |
+          mkdir -p snapshots
+          EXE=build/MEON_artefacts/Release/Standalone/MEON.exe
+          for s in audio settings home; do
+            timeout 60 "$EXE" --nickname=테스트 --screen=$s --window=0,0,1280,800 --snapshot=snapshots/win_$s.png || true
+          done
+          ls -la snapshots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ github.run_number }}
+          path: snapshots/*.png
+          if-no-files-found: ignore
+
       - name: Inno Setup 설치
         run: |
           if [ ! -f "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then choco install innosetup -y --no-progress; fi

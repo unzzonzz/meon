@@ -65,15 +65,17 @@ public:
 private:
     WarningBox warning;
     MeonButton rescanButton, asioGuideButton;
-    TextLabel inLabel, outLabel, bufLabel, bufHint;
-    juce::ComboBox inCombo, outCombo;
+    TextLabel driverLabel, inLabel, outLabel, bufLabel, bufHint;
+    juce::ComboBox driverCombo, inCombo, outCombo;
     juce::OwnedArray<MeonButton> bufferButtons;
-    const int bufferSizes[4] = { 64, 128, 256, 512 };
+    juce::Array<int> bufferSizes { 64, 128, 256, 512 };   // 지금 장치가 지원하는 크기로 바뀐다
+    juce::StringArray driverChoices;                       // Windows 만
     bool noDevices = false;
     bool updating = false;
 
     juce::AudioIODeviceType* deviceType() const;
     void refreshDevices();
+    void applyDriver();
     void applySelection();
     void selectBuffer (int size);
     void updateBufferButtons();

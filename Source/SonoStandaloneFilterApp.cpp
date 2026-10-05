@@ -122,7 +122,7 @@ public:
     String cmdlineArgUrl;
 
     // MEON 개발·테스트 옵션
-    String meonScreen, meonNickname, meonJoinCode, meonWindow;
+    String meonScreen, meonNickname, meonJoinCode, meonWindow, meonSnapshot;
     bool meonCreate = false, meonEnter = false, meonNoInput = false;
 
     virtual StandalonePluginHolder* createHeadlessPlugin ()
@@ -430,6 +430,7 @@ public:
         meonScreen   = arglist.removeValueForOption ("--screen");
         meonJoinCode = arglist.removeValueForOption ("--join");
         meonWindow   = arglist.removeValueForOption ("--window");
+        meonSnapshot = arglist.removeValueForOption ("--snapshot");
         meonCreate   = arglist.removeOptionIfFound ("--create");
         meonEnter    = arglist.removeOptionIfFound ("--enter");
         meonNoInput  = arglist.removeOptionIfFound ("--no-input");
@@ -485,6 +486,21 @@ public:
                 auto parts = StringArray::fromTokens (meonWindow, ",", "");
                 if (parts.size() == 4)
                     mainWindow->setBounds (parts[0].getIntValue(), parts[1].getIntValue(), parts[2].getIntValue(), parts[3].getIntValue());
+            }
+
+            if (meonSnapshot.isNotEmpty()) {
+                // 개발용: 화면을 PNG 로 저장하고 끝낸다 (CI 에서 Windows 렌더링 확인용)
+                Timer::callAfterDelay (3000, [this]() {
+                    if (mainWindow != nullptr) {
+                        auto* content = mainWindow->getContentComponent();
+                        auto image = content->createComponentSnapshot (content->getLocalBounds(), true, 1.0f);
+                        File out = File::getCurrentWorkingDirectory().getChildFile (meonSnapshot);
+                        out.deleteFile();
+                        FileOutputStream stream (out);
+                        PNGImageFormat().writeImageToStream (image, stream);
+                    }
+                    quit();
+                });
             }
 
 #if JUCE_ANDROID && JUCE_OPENGL

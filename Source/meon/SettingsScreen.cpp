@@ -31,6 +31,7 @@ void SettingsScreen::LinkLabel::paintButton (juce::Graphics& g, bool over, bool)
 SettingsScreen::Content::Content (SettingsScreen& o)
     : owner (o), plugin (o.plugin),
       nickInput (o.plugin ? 14.0f : 15.0f),
+      driverPanelButton (TXT ("드라이버 설정")),
       saveButton (TXT ("저장")), logButton (TXT ("로그 폴더 열기")),
       licenseLink (o.plugin ? TXT ("전문 보기") : TXT ("라이선스 전문 보기"), "https://www.gnu.org/licenses/gpl-3.0.html", o.plugin ? 13.0f : 14.0f),
       sourceLink (TXT ("소스 코드"), "https://github.com/unzzonzz/meon", 14.0f)
@@ -52,10 +53,25 @@ SettingsScreen::Content::Content (SettingsScreen& o)
 
     if (! plugin)
     {
+        if (auto* dm = owner.editor.deviceManager())
+            driverChoices = audio::driverTypes (*dm);
+        if (! driverChoices.isEmpty())
+        {
+            addAndMakeVisible (driverCombo);
+            driverCombo.onChange = [this] { applyDriver(); };
+        }
         addAndMakeVisible (inCombo);
         addAndMakeVisible (outCombo);
         addAndMakeVisible (bufCombo);
+        addChildComponent (driverPanelButton);
         addAndMakeVisible (meter);
+        driverPanelButton.setFont (14.0f, 500);
+        driverPanelButton.onClick = [this]
+        {
+            if (auto* dm = owner.editor.deviceManager())
+                audio::showDriverPanel (*dm);
+            refreshDevices();
+        };
         inCombo.onChange = [this] { applyDevices(); };
         outCombo.onChange = [this] { applyDevices(); };
         bufCombo.onChange = [this] { applyBuffer(); };
@@ -95,13 +111,11 @@ void SettingsScreen::Content::refreshDevices()
     fill (inCombo, type != nullptr ? type->getDeviceNames (true) : juce::StringArray(), setup.inputDeviceName);
     fill (outCombo, type != nullptr ? type->getDeviceNames (false) : juce::StringArray(), setup.outputDeviceName);
 
-    // 버퍼 크기는 첫 실행 화면과 같은 네 가지만 보여 준다 (장치가 지원하는 전체 목록은 너무 길다)
+    // 버퍼 크기는 첫 실행 화면과 같은 네 가지 (지금 장치가 실제로 지원하는 크기 중 64/128/256/512 에 가장 가까운 것)
     bufCombo.clear (juce::dontSendNotification);
-    bufferChoices = { 64, 128, 256, 512 };
+    bufferChoices = audio::bufferChoices (*dm);
     const double sr = setup.sampleRate > 0.0 ? setup.sampleRate : 48000.0;
-    int current = setup.bufferSize;
-    if (auto* dev = dm->getCurrentAudioDevice())
-        current = dev->getCurrentBufferSizeSamples();
+    const int current = audio::currentBufferSize (*dm);
     auto label = [sr] (int size) { return juce::String (size) + TXT (" 샘플 · ") + juce::String (size / sr * 1000.0, 1) + " ms"; };
     for (int i = 0; i < bufferChoices.size(); ++i)
         bufCombo.addItem (label (bufferChoices[i]), i + 1);
@@ -110,8 +124,39 @@ void SettingsScreen::Content::refreshDevices()
         bufCombo.setSelectedId (bi + 1, juce::dontSendNotification);
     else if (current > 0)
         bufCombo.setText (label (current), juce::dontSendNotification);   // 네 가지 밖의 값(장치가 고른 값)은 그대로 보여 준다
-    bufCombo.setEnabled (dm->getCurrentAudioDevice() != nullptr);
+    bufCombo.setEnabled (dm->getCurrentAudioDevice() != nullptr && bufferChoices.size() > 1);
+
+    if (! driverChoices.isEmpty())
+    {
+        driverCombo.clear (juce::dontSendNotification);
+        for (int i = 0; i < driverChoices.size(); ++i)
+            driverCombo.addItem (audio::driverLabel (driverChoices[i]), i + 1);
+        const int di = driverChoices.indexOf (dm->getCurrentAudioDeviceType());
+        if (di >= 0)
+            driverCombo.setSelectedId (di + 1, juce::dontSendNotification);
+    }
+    const bool panel = audio::hasDriverPanel (*dm);
+    if (panel != driverPanelButton.isVisible())
+    {
+        driverPanelButton.setVisible (panel);
+        if (getParentComponent() != nullptr)   // 생성 중이 아닐 때만 (버퍼 줄 폭이 바뀐다)
+            owner.resized();
+    }
     updating = false;
+}
+
+void SettingsScreen::Content::applyDriver()
+{
+    if (updating || plugin)
+        return;
+    auto* dm = owner.editor.deviceManager();
+    const int idx = driverCombo.getSelectedId() - 1;
+    if (dm == nullptr || idx < 0 || idx >= driverChoices.size())
+        return;
+    audio::setDriverType (*dm, driverChoices[idx]);
+    if (owner.editor.saveSettingsIfNeeded)
+        owner.editor.saveSettingsIfNeeded();
+    refreshDevices();
 }
 
 void SettingsScreen::Content::applyDevices()
@@ -121,12 +166,9 @@ void SettingsScreen::Content::applyDevices()
     auto* dm = owner.editor.deviceManager();
     if (dm == nullptr)
         return;
-    auto setup = dm->getAudioDeviceSetup();
-    if (inCombo.getSelectedId() > 0)  setup.inputDeviceName = inCombo.getText();
-    if (outCombo.getSelectedId() > 0) setup.outputDeviceName = outCombo.getText();
-    setup.useDefaultInputChannels = true;
-    setup.useDefaultOutputChannels = true;
-    dm->setAudioDeviceSetup (setup, true);   // 합주 중에도 즉시 적용 (스트림 재시작)
+    // 합주 중에도 즉시 적용 (스트림 재시작)
+    audio::setDevices (*dm, inCombo.getSelectedId() > 0 ? inCombo.getText() : juce::String(),
+                       outCombo.getSelectedId() > 0 ? outCombo.getText() : juce::String());
     if (owner.editor.saveSettingsIfNeeded)
         owner.editor.saveSettingsIfNeeded();
     refreshDevices();
@@ -140,9 +182,7 @@ void SettingsScreen::Content::applyBuffer()
     const int idx = bufCombo.getSelectedId() - 1;
     if (dm == nullptr || idx < 0 || idx >= bufferChoices.size())
         return;
-    auto setup = dm->getAudioDeviceSetup();
-    setup.bufferSize = bufferChoices[idx];
-    dm->setAudioDeviceSetup (setup, true);
+    audio::setBufferSize (*dm, bufferChoices[idx]);
     if (owner.editor.saveSettingsIfNeeded)
         owner.editor.saveSettingsIfNeeded();
     refreshDevices();
@@ -195,9 +235,19 @@ void SettingsScreen::Content::layout (int width)
             c.setBounds (labelW, y, width - labelW, ctrlH);
             y += ctrlH + 12;
         };
+        if (! driverChoices.isEmpty())
+            row (TXT ("드라이버"), driverCombo);
         row (TXT ("입력"), inCombo);
         row (TXT ("출력"), outCombo);
         row (TXT ("버퍼 크기"), bufCombo);
+        if (driverPanelButton.isVisible())
+        {
+            // ASIO 는 버퍼 크기를 드라이버 설정 창에서 정하는 경우가 많다
+            const int bw = driverPanelButton.getIdealWidth (18);
+            const int by = bufCombo.getY();
+            bufCombo.setBounds (bufCombo.getBounds().withTrimmedRight (bw + 10));
+            driverPanelButton.setBounds (width - bw, by, bw, ctrlH);
+        }
         rowLabels.push_back ({ TXT ("입력 레벨"), juce::Rectangle<int> (0, y, labelW, ctrlH) });
         meter.setBounds (labelW, y + ctrlH / 2 - 5, width - labelW - 12 - 56, 10);
         levelTextArea = juce::Rectangle<int> (width - 56, y, 56, ctrlH);

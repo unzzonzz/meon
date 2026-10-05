@@ -61,6 +61,7 @@ public:
 
 private:
     juce::Typeface::Ptr regular, medium, semiBold, bold;
+    juce::Array<juce::Typeface::Ptr> memoryFonts;   // Windows: 등록 유지용
 };
 
 struct Fonts

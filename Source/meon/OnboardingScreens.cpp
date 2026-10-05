@@ -1,4 +1,5 @@
 #include "OnboardingScreens.h"
+#include "MeonAudio.h"
 
 namespace meon
 {
@@ -125,6 +126,7 @@ AudioDeviceScreen::AudioDeviceScreen (MeonEditor& e)
                       TXT ("지연을 줄이려면 오디오 인터페이스를 쓰는 것이 좋아요.")),
       rescanButton (TXT ("장치 다시 검색")),
       asioGuideButton (TXT ("ASIO 설치 안내 보기")),
+      driverLabel (TXT ("드라이버"), 13.0f, 500, col::inkSub),
       inLabel (TXT ("입력 장치"), 13.0f, 500, col::inkSub),
       outLabel (TXT ("출력 장치"), 13.0f, 500, col::inkSub),
       bufLabel (TXT ("버퍼 크기"), 13.0f, 500, col::inkSub),
@@ -134,8 +136,6 @@ AudioDeviceScreen::AudioDeviceScreen (MeonEditor& e)
     backButton.onClick = [this] { editor.go (MeonEditor::Screen::Nickname); };
     nextButton.onClick = [this] { editor.go (MeonEditor::Screen::Headphone); };
 
-    warning.setTitle (TXT ("오디오 인터페이스가 필요합니다"));
-    warning.setLines ({ TXT ("ASIO 드라이버가 있는 장치를 찾지 못했어요. Windows 기본 드라이버로는 합주에 필요한 지연을 맞출 수 없습니다.") });
     warning.setButtonsHeight (34);
     rescanButton.setFont (13.0f, 500);
     asioGuideButton.setFont (13.0f, 500);
@@ -145,6 +145,14 @@ AudioDeviceScreen::AudioDeviceScreen (MeonEditor& e)
     warning.addChildComponent (rescanButton);
     warning.addChildComponent (asioGuideButton);
 
+    if (auto* dm = editor.deviceManager())
+        driverChoices = audio::driverTypes (*dm);
+    if (! driverChoices.isEmpty())
+    {
+        addAndMakeVisible (driverLabel);
+        addAndMakeVisible (driverCombo);
+        driverCombo.onChange = [this] { applyDriver(); };
+    }
     addAndMakeVisible (inLabel);
     addAndMakeVisible (outLabel);
     addAndMakeVisible (bufLabel);
@@ -159,8 +167,7 @@ AudioDeviceScreen::AudioDeviceScreen (MeonEditor& e)
         auto* b = bufferButtons.add (new MeonButton (juce::String (bufferSizes[i]), MeonButton::Style::Secondary));
         b->setFont (16.0f, 500);
         b->setSubtitleFont (12.0f, 400);
-        const int size = bufferSizes[i];
-        b->onClick = [this, size] { selectBuffer (size); };
+        b->onClick = [this, i] { if (i < bufferSizes.size()) selectBuffer (bufferSizes[i]); };
         addAndMakeVisible (b);
     }
 
@@ -178,16 +185,7 @@ AudioDeviceScreen::~AudioDeviceScreen()
 juce::AudioIODeviceType* AudioDeviceScreen::deviceType() const
 {
     auto* dm = editor.deviceManager();
-    if (dm == nullptr)
-        return nullptr;
-#if JUCE_WINDOWS
-    for (auto* t : dm->getAvailableDeviceTypes())
-        if (t->getTypeName() == "ASIO")
-            return t;
-    return nullptr;
-#else
-    return dm->getCurrentDeviceTypeObject();
-#endif
+    return dm != nullptr ? dm->getCurrentDeviceTypeObject() : nullptr;
 }
 
 void AudioDeviceScreen::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -204,12 +202,18 @@ void AudioDeviceScreen::refreshDevices()
     juce::StringArray ins, outs;
     if (type != nullptr && dm != nullptr)
     {
-#if JUCE_WINDOWS
-        if (dm->getCurrentAudioDeviceType() != "ASIO")
-            dm->setCurrentAudioDeviceType ("ASIO", true);
-#endif
         ins = type->getDeviceNames (true);
         outs = type->getDeviceNames (false);
+    }
+
+    if (! driverChoices.isEmpty() && dm != nullptr)
+    {
+        driverCombo.clear (juce::dontSendNotification);
+        for (int i = 0; i < driverChoices.size(); ++i)
+            driverCombo.addItem (audio::driverLabel (driverChoices[i]), i + 1);
+        const int di = driverChoices.indexOf (dm->getCurrentAudioDeviceType());
+        if (di >= 0)
+            driverCombo.setSelectedId (di + 1, juce::dontSendNotification);
     }
 
     noDevices = (ins.isEmpty() && outs.isEmpty());
@@ -239,9 +243,23 @@ void AudioDeviceScreen::refreshDevices()
     fill (outCombo, outs, setup.outputDeviceName);
 
 #if JUCE_WINDOWS
-    warning.setVisible (noDevices);
-    rescanButton.setVisible (noDevices);
-    asioGuideButton.setVisible (noDevices);
+    // ASIO 가 아니어도 합주는 되지만 지연이 더 크다는 것을 알려 준다
+    const bool asio = dm != nullptr && dm->getCurrentAudioDeviceType() == "ASIO";
+    if (noDevices)
+    {
+        warning.setTitle (TXT ("오디오 장치를 찾지 못했어요"));
+        warning.setLines ({ asio ? TXT ("ASIO 드라이버가 있는 장치가 없어요. 위에서 드라이버를 ‘Windows 오디오’로 바꾸거나, 오디오 인터페이스의 ASIO 드라이버를 설치해 주세요.")
+                                 : TXT ("장치를 연결한 뒤 ‘장치 다시 검색’을 눌러 주세요.") });
+    }
+    else if (! asio)
+    {
+        warning.setTitle (TXT ("Windows 오디오로 연결했어요"));
+        warning.setLines ({ TXT ("이대로도 합주할 수 있지만 지연이 조금 더 커요. 오디오 인터페이스가 있다면 ASIO 드라이버를 쓰는 것이 좋아요.") });
+    }
+    const bool showWarning = noDevices || ! asio;
+    warning.setVisible (showWarning);
+    rescanButton.setVisible (showWarning);
+    asioGuideButton.setVisible (showWarning);
 #else
     warning.setVisible (false);
 #endif
@@ -251,6 +269,20 @@ void AudioDeviceScreen::refreshDevices()
     resized();
 }
 
+void AudioDeviceScreen::applyDriver()
+{
+    if (updating)
+        return;
+    auto* dm = editor.deviceManager();
+    const int idx = driverCombo.getSelectedId() - 1;
+    if (dm == nullptr || idx < 0 || idx >= driverChoices.size())
+        return;
+    audio::setDriverType (*dm, driverChoices[idx]);
+    if (editor.saveSettingsIfNeeded)
+        editor.saveSettingsIfNeeded();
+    refreshDevices();
+}
+
 void AudioDeviceScreen::applySelection()
 {
     if (updating)
@@ -258,17 +290,11 @@ void AudioDeviceScreen::applySelection()
     auto* dm = editor.deviceManager();
     if (dm == nullptr)
         return;
-    auto setup = dm->getAudioDeviceSetup();
-    if (inCombo.getSelectedId() > 0)  setup.inputDeviceName = inCombo.getText();
-    if (outCombo.getSelectedId() > 0) setup.outputDeviceName = outCombo.getText();
-    setup.useDefaultInputChannels = true;
-    setup.useDefaultOutputChannels = true;
-    if (setup.sampleRate <= 0.0)
-        setup.sampleRate = 48000.0;
-    dm->setAudioDeviceSetup (setup, true);
+    audio::setDevices (*dm, inCombo.getSelectedId() > 0 ? inCombo.getText() : juce::String(),
+                       outCombo.getSelectedId() > 0 ? outCombo.getText() : juce::String());
     if (editor.saveSettingsIfNeeded)
         editor.saveSettingsIfNeeded();
-    updateBufferButtons();
+    refreshDevices();   // ASIO 는 입력·출력이 함께 바뀐다
 }
 
 void AudioDeviceScreen::selectBuffer (int size)
@@ -276,9 +302,7 @@ void AudioDeviceScreen::selectBuffer (int size)
     auto* dm = editor.deviceManager();
     if (dm == nullptr)
         return;
-    auto setup = dm->getAudioDeviceSetup();
-    setup.bufferSize = size;
-    dm->setAudioDeviceSetup (setup, true);
+    audio::setBufferSize (*dm, size);
     if (editor.saveSettingsIfNeeded)
         editor.saveSettingsIfNeeded();
     updateBufferButtons();
@@ -289,14 +313,18 @@ void AudioDeviceScreen::updateBufferButtons()
     auto* dm = editor.deviceManager();
     auto setup = dm != nullptr ? dm->getAudioDeviceSetup() : juce::AudioDeviceManager::AudioDeviceSetup();
     const double sr = setup.sampleRate > 0.0 ? setup.sampleRate : 48000.0;
-    int current = setup.bufferSize;
-    if (auto* dev = dm != nullptr ? dm->getCurrentAudioDevice() : nullptr)
-        current = dev->getCurrentBufferSizeSamples();
+    const int current = dm != nullptr ? audio::currentBufferSize (*dm) : setup.bufferSize;
+    if (dm != nullptr)
+        bufferSizes = audio::bufferChoices (*dm);
 
     for (int i = 0; i < bufferButtons.size(); ++i)
     {
         auto* b = bufferButtons[i];
+        b->setVisible (i < bufferSizes.size());
+        if (i >= bufferSizes.size())
+            continue;
         const int size = bufferSizes[i];
+        b->setLabel (juce::String (size));
         const bool sel = (size == current);
         b->setSubtitle (juce::String (size / sr * 1000.0, 1) + " ms");
         if (sel)
@@ -333,6 +361,11 @@ void AudioDeviceScreen::layoutBody (juce::Rectangle<int> body)
     }
 
     y += 32;
+    if (driverCombo.isVisible())
+    {
+        driverLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
+        driverCombo.setBounds (body.getX(), y, w, 48); y += 48 + 20;
+    }
     inLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
     inCombo.setBounds (body.getX(), y, w, 48); y += 48 + 20;
     outLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
@@ -341,8 +374,9 @@ void AudioDeviceScreen::layoutBody (juce::Rectangle<int> body)
     bufHint.setBounds (body.getX() + 200, y, w - 200, 16); y += 16 + 8;
 
     const int gap = 8;
-    const int bw = (w - gap * 3) / 4;
-    for (int i = 0; i < bufferButtons.size(); ++i)
+    const int n = juce::jmax (1, juce::jmin (bufferButtons.size(), bufferSizes.size()));
+    const int bw = (w - gap * (n - 1)) / n;
+    for (int i = 0; i < n; ++i)
         bufferButtons[i]->setBounds (body.getX() + i * (bw + gap), y, bw, 48);
 }
 
