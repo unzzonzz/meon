@@ -6,7 +6,7 @@ name: Windows build
 
 on:
   push:
-    branches: [main, windows-build]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
