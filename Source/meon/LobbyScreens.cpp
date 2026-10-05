@@ -68,8 +68,7 @@ void HomeScreen::resized()
     footer = r.removeFromBottom (footerH);
     centre = r;
 
-    const float logoPx = plugin ? 34.0f : 44.0f;
-    const int logoH = (int) std::ceil (Fonts::get (700, logoPx).getHeight());
+    const int logoH = plugin ? 60 : 76;
     const int greetH = (int) std::ceil (Fonts::get (400, plugin ? 14.0f : 16.0f).getHeight());
     const int btnW = plugin ? 220 : 260, btnH = plugin ? 84 : 96, gap = plugin ? 14 : 16;
     const int contentH = logoH + (plugin ? 10 : 14) + greetH + (plugin ? 40 : 52) + btnH;
@@ -85,14 +84,13 @@ void HomeScreen::paint (juce::Graphics& g)
     ScreenBase::paint (g);
     auto& session = editor.getSession();
 
-    const float logoPx = plugin ? 34.0f : 44.0f;
-    const int logoH = (int) std::ceil (Fonts::get (700, logoPx).getHeight());
+    const int logoH = plugin ? 60 : 76;
     const int greetH = (int) std::ceil (Fonts::get (400, plugin ? 14.0f : 16.0f).getHeight());
     const int btnH = plugin ? 84 : 96;
     const int contentH = logoH + (plugin ? 10 : 14) + greetH + (plugin ? 40 : 52) + btnH;
     const int top = centre.getY() + (centre.getHeight() - contentH) / 2;
 
-    drawLogo (g, juce::Rectangle<float> ((float) centre.getX(), (float) top, (float) centre.getWidth(), (float) logoH), logoPx, 0.22f);
+    drawLogo (g, juce::Rectangle<float> ((float) centre.getX(), (float) top, (float) centre.getWidth(), (float) logoH), (float) logoH);
 
     g.setFont (Fonts::get (400, plugin ? 14.0f : 16.0f));
     g.setColour (col::inkSub);

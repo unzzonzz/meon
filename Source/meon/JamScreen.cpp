@@ -956,8 +956,8 @@ void JamScreen::resized()
     const bool open = effectiveChatOpen();
     chatPeek->setVisible (! open);
 
-    const float logoPx = plugin ? 15.0f : 17.0f;
-    int x = topBar.getX() + padX + (int) std::ceil (logoWidth (logoPx, 0.18f)) + (plugin ? 14 : 20) + 1 + (plugin ? 14 : 20);
+    const float logoH = plugin ? 26.0f : 30.0f;
+    int x = topBar.getX() + padX + (int) std::ceil (logoWidth (logoH)) + (plugin ? 14 : 20) + 1 + (plugin ? 14 : 20);
     if (! plugin)
         x += (int) std::ceil (Fonts::get (500, 13.0f).getStringWidthFloat (TXT ("초대 코드"))) + 12;
     const float codePx = plugin ? 17.0f : 22.0f;
@@ -1024,10 +1024,10 @@ void JamScreen::paint (juce::Graphics& g)
     g.fillRect (topBar.getX(), topBar.getBottom() - 1, topBar.getWidth(), 1);
 
     const int padX = plugin ? 14 : 20;
-    const float logoPx = plugin ? 15.0f : 17.0f;
+    const float logoH = plugin ? 26.0f : 30.0f;
     float x = (float) (topBar.getX() + padX);
-    drawLogo (g, juce::Rectangle<float> (x, (float) topBar.getY(), logoWidth (logoPx, 0.18f) + 4.0f, (float) topBar.getHeight()), logoPx, 0.18f, juce::Justification::centredLeft);
-    x += logoWidth (logoPx, 0.18f) + (plugin ? 14.0f : 20.0f);
+    drawLogo (g, juce::Rectangle<float> (x, (float) topBar.getY(), logoWidth (logoH), (float) topBar.getHeight()), logoH, col::ink, juce::Justification::centredLeft);
+    x += logoWidth (logoH) + (plugin ? 14.0f : 20.0f);
     g.setColour (col::cardBorder);
     g.fillRect (juce::Rectangle<float> (x, (float) topBar.getCentreY() - (plugin ? 10.0f : 12.0f), 1.0f, plugin ? 20.0f : 24.0f));
     x += 1.0f + (plugin ? 14.0f : 20.0f);

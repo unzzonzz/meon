@@ -80,10 +80,11 @@ float paragraphHeight (const juce::String& text, const juce::Font& font, float w
 /** 텍스트 폭 */
 float textWidth (const juce::Font& font, const juce::String& text);
 
-/** MEON 로고 텍스트 (자간 넓게, O 만 포인트 색). fontPx 는 글자 크기. */
-void drawLogo (juce::Graphics& g, juce::Rectangle<float> area, float fontPx, float letterSpacingEm,
+/** MEON 필기체 로고 (images/meon_logo.svg). heightPx 는 로고(viewBox) 높이, 폭은 비율대로 정해진다.
+    색: 밝은 바탕 col::ink(#1A1A1A), 어두운 바탕 흰색. 모양은 그대로 두고 크기·색만 바꾼다. */
+void drawLogo (juce::Graphics& g, juce::Rectangle<float> area, float heightPx, juce::Colour colour = col::ink,
                juce::Justification justification = juce::Justification::centred);
-float logoWidth (float fontPx, float letterSpacingEm);
+float logoWidth (float heightPx);
 
 /** 자간(letter-spacing, em 단위)이 있는 한 줄 텍스트 */
 void drawSpacedText (juce::Graphics& g, const juce::String& text, const juce::Font& font, float fontPx, float letterSpacingEm,

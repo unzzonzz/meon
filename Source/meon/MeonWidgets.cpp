@@ -402,8 +402,8 @@ bool CodeInput::keyPressed (const juce::KeyPress& k)
 
     if (k.getModifiers().isCommandDown())
     {
-        const auto ch = juce::CharacterFunctions::toUpperCase (k.getTextCharacter());
-        if (ch == 'V')
+        // 한글 자판에서는 ⌘V 의 문자가 'ㅍ' 로 들어오므로 자판과 무관한 키 코드로 판별한다
+        if (juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) k.getKeyCode()) == 'V')
         {
             auto clip = juce::SystemClipboard::getTextFromClipboard().toUpperCase();
             for (int i = 0; i < clip.length() && code.length() < 6; ++i)

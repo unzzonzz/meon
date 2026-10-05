@@ -153,8 +153,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         BUNDLE_ID "com.meon.MEON"
         MICROPHONE_PERMISSION_ENABLED TRUE
         
-        ICON_BIG "images/meon_icon_mac_1024.png"
-        ICON_SMALL "images/meon_icon_mac_256.png"
+        ICON_BIG "images/icons/mac/meon_mac_1024.png"
+        ICON_SMALL "images/icons/mac/meon_mac_256.png"
         NEEDS_WEB_BROWSER FALSE
         VST2_CATEGORY "${vst2cat}"
         VST3_CATEGORIES "${vst3cats}"
@@ -424,6 +424,16 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         MEON_BUILD_NUMBER=${BUILDVERSION}
         ${PLAT_COMPILE_DEFS} )
 
+    # 아이콘: JUCE 는 ICON_BIG 하나를 축소해 모든 크기를 만든다. MEON 은 작은 크기에서 M 만 쓰는
+    # 크기별 아이콘(scripts/make_icons.py 로 생성)을 쓰므로, JUCE 가 만든 파일을 미리 만든 것으로 덮어쓴다.
+    # 앱·AU·VST3 번들이 모두 이 파일을 쓴다.
+    get_target_property(meon_gen_dir "${target_name}" JUCE_GENERATED_SOURCES_DIRECTORY)
+    if (APPLE)
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/images/icons/MEON.icns" "${meon_gen_dir}/Icon.icns" COPYONLY)
+    elseif (WIN32)
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/images/icons/MEON.ico" "${meon_gen_dir}/icon.ico" COPYONLY)
+    endif()
+
     juce_add_binary_data("${target_name}_SBData" SOURCES
         Source/fonts/Pretendard-Regular.otf
         Source/fonts/Pretendard-Medium.otf
@@ -432,6 +442,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         images/bar_click.wav
         images/beat_click.wav
         images/lgc_bar.wav
+        images/meon_logo.svg
     )
 
     set_target_properties(${target_name}_SBData PROPERTIES FOLDER "Targets")
@@ -493,6 +504,23 @@ endfunction()
 
 # MEON: 독립 앱 + AU + VST3 (하나의 타깃)
 sono_add_custom_plugin_target(MEON MEON "${FormatsToBuild}" FALSE  "Mjam")
+
+# 개발용: 독립 앱을 빌드할 때마다 고정 경로(기본 /Applications/MEON.app)로 덮어쓴다.
+# Dock 에 이 경로를 고정해 두면 항상 최신 빌드가 열린다. 끄려면 -DMEON_DEV_INSTALL_DIR=
+if (APPLE AND TARGET MEON_Standalone)
+    set(MEON_DEV_INSTALL_DIR "/Applications" CACHE PATH "빌드 후 MEON.app 을 복사할 폴더 (비우면 복사 안 함)")
+    if (MEON_DEV_INSTALL_DIR)
+        # rsync 는 새 파일을 임시 이름으로 쓴 뒤 바꿔치기하므로 실행 중인 앱이 있어도 안전하다.
+        # 번들 폴더 자체는 그대로 두므로 Dock 고정·권한(마이크) 기록이 유지된다.
+        add_custom_command(TARGET MEON_Standalone POST_BUILD
+            COMMAND mkdir -p "${MEON_DEV_INSTALL_DIR}/MEON.app"
+            COMMAND rsync -a --delete "$<TARGET_BUNDLE_DIR:MEON_Standalone>/" "${MEON_DEV_INSTALL_DIR}/MEON.app/"
+            COMMAND codesign --force --sign - "${MEON_DEV_INSTALL_DIR}/MEON.app"
+            COMMAND /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${MEON_DEV_INSTALL_DIR}/MEON.app"
+            COMMENT "MEON.app -> ${MEON_DEV_INSTALL_DIR}/MEON.app"
+            VERBATIM)
+    endif()
+endif()
 
 # Mobile targets
 #sono_add_custom_plugin_target(SonoBusMobile "AUv3 Standalone" FALSE "NBus")

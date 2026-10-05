@@ -70,36 +70,47 @@ float textWidth (const juce::Font& font, const juce::String& text)
     return font.getStringWidthFloat (text);
 }
 
-float logoWidth (float fontPx, float letterSpacingEm)
+// 로고 SVG(images/meon_logo.svg)의 viewBox 크기. 로고 높이는 이 viewBox 높이 기준이다.
+static constexpr float logoViewW = 396.5f;
+static constexpr float logoViewH = 152.5f;
+
+static const juce::Path& logoPath()
 {
-    auto font = Fonts::get (700, fontPx);
-    float w = 0.0f;
-    const juce::String letters ("MEON");
-    for (int i = 0; i < letters.length(); ++i)
-        w += font.getStringWidthFloat (letters.substring (i, i + 1));
-    return w + letterSpacingEm * fontPx * 3.0f;
+    static const juce::Path path = []
+    {
+        juce::Path p;
+        if (auto xml = juce::XmlDocument::parse (juce::String::fromUTF8 (BinaryData::meon_logo_svg, BinaryData::meon_logo_svgSize)))
+            if (auto* e = xml->getChildByName ("path"))
+                p = juce::Drawable::parseSVGPath (e->getStringAttribute ("d"));
+        p.setUsingNonZeroWinding (false); // fill-rule="evenodd"
+        return p;
+    }();
+    return path;
 }
 
-void drawLogo (juce::Graphics& g, juce::Rectangle<float> area, float fontPx, float letterSpacingEm, juce::Justification justification)
+float logoWidth (float heightPx)
 {
-    auto font = Fonts::get (700, fontPx);
-    const juce::String letters ("MEON");
-    const float total = logoWidth (fontPx, letterSpacingEm);
+    return heightPx * logoViewW / logoViewH;
+}
+
+void drawLogo (juce::Graphics& g, juce::Rectangle<float> area, float heightPx, juce::Colour colour, juce::Justification justification)
+{
+    const float w = logoWidth (heightPx);
     float x = area.getX();
     if (justification.testFlags (juce::Justification::horizontallyCentred))
-        x = area.getCentreX() - total * 0.5f;
+        x = area.getCentreX() - w * 0.5f;
     else if (justification.testFlags (juce::Justification::right))
-        x = area.getRight() - total;
+        x = area.getRight() - w;
 
-    g.setFont (font);
-    for (int i = 0; i < letters.length(); ++i)
-    {
-        auto ch = letters.substring (i, i + 1);
-        float w = font.getStringWidthFloat (ch);
-        g.setColour (ch == "O" ? col::accent : col::ink);
-        g.drawText (ch, juce::Rectangle<float> (x, area.getY(), w + 2.0f, area.getHeight()), juce::Justification::centredLeft, false);
-        x += w + letterSpacingEm * fontPx;
-    }
+    float y = area.getCentreY() - heightPx * 0.5f;
+    if (justification.testFlags (juce::Justification::top))
+        y = area.getY();
+    else if (justification.testFlags (juce::Justification::bottom))
+        y = area.getBottom() - heightPx;
+
+    const float s = heightPx / logoViewH;
+    g.setColour (colour);
+    g.fillPath (logoPath(), juce::AffineTransform::scale (s).translated (x, y));
 }
 
 float spacedTextWidth (const juce::String& text, const juce::Font& font, float fontPx, float letterSpacingEm)
