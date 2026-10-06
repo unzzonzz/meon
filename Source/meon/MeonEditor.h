@@ -58,8 +58,6 @@ public:
     void applyTestOptions (const juce::String& nickname, const juce::String& screenName,
                            bool autoCreateRoom, const juce::String& autoJoinCode, bool autoEnterJam);
 
-    /** "⌘ C" (Mac) / "Ctrl C" (Windows) */
-    static juce::String cmdKeyLabel (const juce::String& key);
     juce::String getHostDescription() const;
     juce::String getVersionText() const;
 

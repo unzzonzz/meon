@@ -309,8 +309,6 @@ public:
     explicit AlonePanel (JamScreen& o) : owner (o), plugin (o.isPlugin()), copyButton (TXT ("코드 복사"), MeonButton::Style::Primary)
     {
         copyButton.setFont (plugin ? 15.0f : 17.0f, 600);
-        copyButton.setBadge (MeonEditor::cmdKeyLabel ("C"));
-        copyButton.setBadgeMetrics (plugin ? 20.0f : 22.0f, 11.0f, plugin ? 10.0f : 12.0f);
         copyButton.onClick = [this] { owner.copyCode(); };
         addAndMakeVisible (copyButton);
     }
@@ -384,8 +382,6 @@ public:
     {
         collapseButton.setFont (plugin ? 11.0f : 12.0f, 500);
         collapseButton.setColourOverride (col::white, col::inkSub, col::border, col::panel);
-        collapseButton.setBadge ("C");
-        collapseButton.setBadgeMetrics (plugin ? 16.0f : 18.0f, plugin ? 10.0f : 11.0f, plugin ? 6.0f : 7.0f);
         collapseButton.onClick = [this] { owner.toggleChat(); };
         sendButton.setFont (plugin ? 12.0f : 14.0f, 500);
         sendButton.onClick = [this] { send(); };

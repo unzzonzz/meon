@@ -12,11 +12,6 @@ HomeScreen::HomeScreen (MeonEditor& e)
 {
     settingsButton.setFont (13.0f, 500);
     settingsButton.setColourOverride (col::white, col::inkBody, col::border, col::panel);
-    if (! plugin)
-    {
-        settingsButton.setBadge (MeonEditor::cmdKeyLabel (","));
-        settingsButton.setBadgeMetrics (20.0f, 11.0f, 8.0f);
-    }
     settingsButton.onClick = [this] { editor.openSettings(); };
 
     createButton.setFont (plugin ? 19.0f : 22.0f, 700);
@@ -141,8 +136,6 @@ CreateRoomScreen::CreateRoomScreen (MeonEditor& e)
     };
 
     copyButton.setFont (plugin ? 15.0f : 16.0f, 500);
-    copyButton.setBadge (MeonEditor::cmdKeyLabel ("C"));
-    copyButton.setBadgeMetrics (plugin ? 20.0f : 22.0f, 11.0f, plugin ? 9.0f : 10.0f);
     copyButton.onClick = [this] { copyCode(); };
 
     enterButton.setFont (plugin ? 16.0f : 17.0f, 600);

@@ -226,15 +226,6 @@ void MeonEditor::copyRoomCodeToClipboard()
         juce::SystemClipboard::copyTextToClipboard (code);
 }
 
-juce::String MeonEditor::cmdKeyLabel (const juce::String& key)
-{
-#if JUCE_MAC
-    return TXT ("⌘ ") + key;
-#else
-    return "Ctrl " + key;
-#endif
-}
-
 juce::String MeonEditor::getHostDescription() const
 {
     if (! pluginMode)
