@@ -280,6 +280,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/meon/MeonLookAndFeel.h
         Source/meon/MeonWidgets.cpp
         Source/meon/MeonWidgets.h
+        Source/meon/MeonParts.cpp
+        Source/meon/MeonParts.h
         Source/meon/MeonSettings.cpp
         Source/meon/MeonSettings.h
         Source/meon/MeonSessionLog.cpp

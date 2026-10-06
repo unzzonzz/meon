@@ -4,6 +4,7 @@
 
 #include "../SonobusPluginProcessor.h"
 #include "MeonTheme.h"
+#include "MeonParts.h"
 #include "MeonSettings.h"
 #include "MeonSessionLog.h"
 #include <vector>
@@ -26,6 +27,7 @@ public:
     {
         juce::String userName;      // 서버 사용자 이름 (닉네임#xxxx)
         juce::String displayName;   // 닉네임
+        Part part = Part::None;     // 사용자 이름 끝 글자로 전달된 파트 (구버전은 None)
         int slot = -1;              // 0..3 (카드 위치). -1 이면 카드 없음
         bool pending = true;        // 아직 P2P 연결 전
         bool connected = false;
@@ -111,6 +113,7 @@ public:
     float getMyInputLevelDb (int channel = -1) const;  // 장치 입력 (뮤트와 무관)
     float getMySendLevelDb() const;                    // 실제로 보내는 신호
     juce::String getDisplayName() const;
+    Part getMyPart() const;                  // 설정의 파트 (고른 적 없으면 None)
     juce::String getUserName() const { return userName; }
     void setInputChannels (int start, int count);      // 독립 앱 전용
 
@@ -128,6 +131,7 @@ public:
 
     static juce::String generateRoomCode();
     static juce::String displayNameFor (const juce::String& userName);
+    static Part partFor (const juce::String& userName);
     static bool isValidRoomCode (const juce::String& code);
 
     SonobusAudioProcessor& getProcessor() { return processor; }

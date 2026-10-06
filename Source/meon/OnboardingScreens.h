@@ -3,6 +3,7 @@
 
 #include "MeonEditor.h"
 #include "MeonWidgets.h"
+#include "MeonParts.h"
 
 namespace meon
 {
@@ -47,8 +48,9 @@ public:
     void layoutBody (juce::Rectangle<int> body) override;
     void parentHierarchyChanged() override;
 private:
-    TextLabel fieldLabel, fieldHint;
+    TextLabel fieldLabel, fieldHint, partLabel;
     MeonTextEditor input;
+    PartSelector partSelector;
     void validate();
     void submit();
 };

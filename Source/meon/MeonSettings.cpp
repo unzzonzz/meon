@@ -42,6 +42,17 @@ void MeonSettings::setNickname (const juce::String& name)
     save();
 }
 
+juce::String MeonSettings::getPartKey() const
+{
+    return props->getValue ("part", "");
+}
+
+void MeonSettings::setPartKey (const juce::String& key)
+{
+    props->setValue ("part", key);
+    save();
+}
+
 bool MeonSettings::isOnboardingDone (bool plugin) const
 {
     return props->getBoolValue (plugin ? "onboardingDonePlugin" : "onboardingDoneApp", false);

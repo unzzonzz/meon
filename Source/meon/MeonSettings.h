@@ -1,4 +1,4 @@
-// MEON - 로컬 사용자 설정 (닉네임, 첫 실행 완료 여부, 입력 채널). 독립 앱과 플러그인이 같은 파일을 공유한다.
+// MEON - 로컬 사용자 설정 (닉네임, 파트, 첫 실행 완료 여부, 입력 채널). 독립 앱과 플러그인이 같은 파일을 공유한다.
 #pragma once
 
 #include <JuceHeader.h>
@@ -14,6 +14,10 @@ public:
 
     juce::String getNickname() const;
     void setNickname (const juce::String& name);
+
+    /** 파트 키 ("vocal" "guitar" … parts::key). 고른 적 없으면 빈 문자열 */
+    juce::String getPartKey() const;
+    void setPartKey (const juce::String& key);
 
     /** 첫 실행 흐름을 끝냈는지. 독립 앱과 플러그인은 따로 기록한다 (헤드폰 확인 단계가 다르므로). */
     bool isOnboardingDone (bool plugin) const;

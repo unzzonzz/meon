@@ -110,12 +110,22 @@ bool MeonSession::isValidRoomCode (const juce::String& code)
     return true;
 }
 
+// 사용자 이름 = 닉네임#XXXX(+파트 한 글자). 파트는 서버·엔진을 거치지 않고 이름에 실어 보낸다.
 juce::String MeonSession::displayNameFor (const juce::String& user)
 {
     const int hash = user.lastIndexOfChar ('#');
-    if (hash > 0 && user.length() - hash - 1 == 4)
+    const int suffixLen = user.length() - hash - 1;
+    if (hash > 0 && (suffixLen == 4 || suffixLen == 5))
         return user.substring (0, hash);
     return user;
+}
+
+Part MeonSession::partFor (const juce::String& user)
+{
+    const int hash = user.lastIndexOfChar ('#');
+    if (hash > 0 && user.length() - hash - 1 == 5)
+        return parts::fromCode (user.getLastCharacter());
+    return Part::None;
 }
 
 juce::String MeonSession::makeUserName() const
@@ -125,7 +135,15 @@ juce::String MeonSession::makeUserName() const
     const int n = (int) strlen (kCodeChars);
     for (int i = 0; i < 4; ++i)
         suffix += juce::String::charToString ((juce::juce_wchar) kCodeChars[rng.nextInt (n)]);
+    const auto code = parts::code (getMyPart());
+    if (code != 0)
+        suffix += juce::String::charToString (code);
     return settings.getNickname().trim() + "#" + suffix;
+}
+
+Part MeonSession::getMyPart() const
+{
+    return parts::fromKey (settings.getPartKey());
 }
 
 juce::String MeonSession::getDisplayName() const
@@ -729,6 +747,7 @@ void MeonSession::handleEvent (const Event& e)
                 Member nm;
                 nm.userName = e.user;
                 nm.displayName = displayNameFor (e.user);
+                nm.part = partFor (e.user);
                 nm.slot = firstFreeSlot();
                 nm.joinedAtMs = now;
                 members.push_back (nm);
@@ -877,6 +896,7 @@ void MeonSession::reconcilePeers()
         Member nm;
         nm.userName = user;
         nm.displayName = displayNameFor (user);
+        nm.part = partFor (user);
         nm.slot = firstFreeSlot();
         nm.pending = false;
         nm.connected = processor.getRemotePeerConnected (i);

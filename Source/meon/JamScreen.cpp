@@ -1,4 +1,5 @@
 #include "JamScreen.h"
+#include "MeonParts.h"
 
 namespace meon
 {
@@ -83,18 +84,26 @@ public:
         g.setColour (muted ? col::accent : col::cardBorder);
         g.drawRoundedRectangle (r.reduced (0.5f), (float) metric::radiusCard, 1.0f);
 
+        // 파트 아이콘 + 닉네임 / 아래 줄 "나 · 파트" (닉네임 첫 글자에 맞춰 들여씀)
+        auto& session = owner.getEditor().getSession();
+        const Part part = session.getMyPart();
         auto inner = getLocalBounds().reduced (plugin ? 14 : 20, plugin ? 12 : 18);
-        auto nameFont = Fonts::get (700, plugin ? 18.0f : 22.0f);
+        auto nameFont = Fonts::get (700, plugin ? 18.0f : 24.0f);
         auto subFont = Fonts::get (500, plugin ? 12.0f : 13.0f);
         const int nameH = (int) std::ceil (nameFont.getHeight()), subH = (int) std::ceil (subFont.getHeight());
-        const int gap = plugin ? 2 : 3;
+        const int gap = plugin ? 2 : 4;
+        const int boxW = plugin ? 96 : 150;
+        const float iconSize = plugin ? 22.0f : 28.0f;
+        const int indent = part == Part::None ? 0 : (int) iconSize + (plugin ? 6 : 8);
         const int y = inner.getCentreY() - (nameH + gap + subH) / 2;
+        parts::drawIcon (g, { (float) inner.getX(), (float) y, iconSize, (float) nameH }, iconSize, part, col::ink);
         g.setColour (col::ink);
         g.setFont (nameFont);
-        g.drawText (owner.getEditor().getSession().getDisplayName(), juce::Rectangle<int> (inner.getX(), y, plugin ? 96 : 150, nameH), juce::Justification::centredLeft, true);
+        g.drawText (session.getDisplayName(), juce::Rectangle<int> (inner.getX() + indent, y, boxW - indent, nameH), juce::Justification::centredLeft, true);
         g.setColour (col::inkSub);
         g.setFont (subFont);
-        g.drawText (TXT ("나"), juce::Rectangle<int> (inner.getX(), y + nameH + gap, plugin ? 96 : 150, subH), juce::Justification::centredLeft, false);
+        const juce::String sub = part == Part::None ? TXT ("나") : TXT ("나 · ") + parts::label (part);
+        g.drawText (sub, juce::Rectangle<int> (inner.getX() + indent, y + nameH + gap, boxW - indent, subH), juce::Justification::centredLeft, true);
 
         if (! plugin)
         {
@@ -121,7 +130,7 @@ private:
 class JamScreen::MemberCard : public juce::Component
 {
 public:
-    MemberCard (JamScreen& o, int slotIn) : owner (o), plugin (o.isPlugin()), slot (slotIn), muteButton (TXT ("뮤트"))
+    MemberCard (JamScreen& o, int slotIn) : owner (o), plugin (o.isPlugin()), slot (slotIn), muteButton (TXT ("뮤트")), resetButton (TXT ("0 dB로"))
     {
         meter.setCornerRadius (3.0f);
         volume.setColour (juce::Slider::backgroundColourId, col::cardBorder);
@@ -132,8 +141,22 @@ public:
             {
                 owner.getEditor().getSession().setMemberGain (slot, (float) volume.getValue());
                 member.gain = (float) volume.getValue();
+                updateResetButton();
                 repaint (volTextArea);
             }
+        };
+        resetButton.setFont (plugin ? 12.0f : 13.0f, 500);
+        resetButton.onClick = [this]
+        {
+            if (! haveMember || ! member.connected)
+                return;
+            owner.getEditor().getSession().setMemberGain (slot, 1.0f);
+            member.gain = 1.0f;
+            syncing = true;
+            volume.setValue (1.0, juce::dontSendNotification);
+            syncing = false;
+            updateResetButton();
+            repaint (volTextArea);
         };
         muteButton.setFont (plugin ? 13.0f : 15.0f, 600);
         muteButton.setBadge (juce::String (slot + 1));
@@ -146,9 +169,17 @@ public:
         addAndMakeVisible (meter);
         addAndMakeVisible (volume);
         addAndMakeVisible (muteButton);
+        addAndMakeVisible (resetButton);
     }
 
     int getSlot() const { return slot; }
+
+    /** 이미 0.0 dB 이거나 끊긴 멤버면 비활성 (#AAAAAA) */
+    void updateResetButton()
+    {
+        const bool atZero = std::abs (juce::Decibels::gainToDecibels (volume.getValue(), -100.0)) < 0.05;
+        resetButton.setEnabled (haveMember && member.connected && ! atZero);
+    }
 
     void update (const MeonSession::Member& m)
     {
@@ -172,6 +203,7 @@ public:
         meter.setDisabledLook (off);
         if (off || m.muted)
             meter.reset();
+        updateResetButton();
         resized();
         repaint();
     }
@@ -186,10 +218,10 @@ public:
     {
         const int padX = plugin ? 14 : 20, padY = plugin ? 12 : 18;
         auto r = getLocalBounds().reduced (padX, padY);
-        auto nameFont = Fonts::get (700, plugin ? 18.0f : 24.0f);
-        const int headerH = (int) std::ceil (nameFont.getHeight());
+        const int headerH = headerHeight();
         const int muteH = plugin ? 30 : 38;
-        const int meterH = plugin ? 10 : 12, volH = 16;
+        const int resetH = plugin ? 26 : 30;
+        const int meterH = plugin ? 10 : 12, volH = resetH;
         const int muteW = muteButton.getIdealWidth (plugin ? 10 : 14);
         muteButton.setBounds (r.getX(), r.getBottom() - muteH, muteW, muteH);
 
@@ -201,8 +233,13 @@ public:
         const int volY = meterY + meterH + gap;
         const int labelW = plugin ? 0 : (int) std::ceil (Fonts::get (500, 13.0f).getStringWidthFloat (TXT ("볼륨"))) + 14;
         const int textW = plugin ? 58 : 66;
-        volume.setBounds (r.getX() + labelW, volY, r.getWidth() - labelW - textW - (plugin ? 10 : 14), volH);
-        volTextArea = juce::Rectangle<int> (r.getRight() - textW, volY, textW, volH);
+        const int rowGap = plugin ? 10 : 14;
+        // 볼륨 줄: [볼륨] 슬라이더 · 값 · "0 dB로"
+        const int resetW = resetButton.getIdealWidth (plugin ? 8 : 10);
+        resetButton.setBounds (r.getRight() - resetW, volY, resetW, resetH);
+        const int textRight = resetButton.getX() - (plugin ? 8 : 10);
+        volume.setBounds (r.getX() + labelW, volY + (volH - 16) / 2, textRight - textW - rowGap - (r.getX() + labelW), 16);
+        volTextArea = juce::Rectangle<int> (textRight - textW, volY, textW, volH);
         volLabelArea = juce::Rectangle<int> (r.getX(), volY, labelW, volH);
         statusArea = juce::Rectangle<int> (muteButton.getRight() + (plugin ? 8 : 10), muteButton.getY(), r.getRight() - muteButton.getRight() - 10, muteH);
     }
@@ -220,17 +257,32 @@ public:
         const int padX = plugin ? 14 : 20, padY = plugin ? 12 : 18;
         auto inner = getLocalBounds().reduced (padX, padY);
         auto nameFont = Fonts::get (700, plugin ? 18.0f : 24.0f);
-        const int headerH = (int) std::ceil (nameFont.getHeight());
-        const float dot = plugin ? 8.0f : 9.0f;
+        const int headerH = (int) std::ceil (nameFont.getHeight());   // 이름 줄 (핑도 이 줄 가운데)
         const juce::Colour ink = off ? col::disabled : col::ink;
 
-        // 이름 줄: 점 + 이름
-        g.setColour (off ? col::disabled : col::accent);
-        g.fillEllipse ((float) inner.getX(), (float) inner.getY() + (float) headerH * 0.5f - dot * 0.5f, dot, dot);
+        // 이름 줄: 파트 아이콘(끊기면 회색) + 닉네임. 앱은 아래 줄에 파트 이름, 플러그인은 같은 줄에
+        const float iconSize = plugin ? 22.0f : 28.0f;
+        const int iconGap = plugin ? 6 : 8;
+        const bool hasPart = member.part != Part::None;
+        parts::drawIcon (g, { (float) inner.getX(), (float) inner.getY(), iconSize, (float) headerH }, iconSize, member.part,
+                         off ? col::disabled : col::ink);
+        const int nameX = inner.getX() + (hasPart ? (int) iconSize + iconGap : 0);
+        const int maxNameW = inner.getWidth() / 2;
+        const int nameW = juce::jmin (maxNameW, (int) std::ceil (nameFont.getStringWidthFloat (member.displayName)) + 2);
         g.setColour (ink);
         g.setFont (nameFont);
-        const int nameX = inner.getX() + (int) dot + (plugin ? 8 : 10);
-        g.drawText (member.displayName, juce::Rectangle<int> (nameX, inner.getY(), inner.getWidth() / 2, headerH), juce::Justification::centredLeft, true);
+        g.drawText (member.displayName, juce::Rectangle<int> (nameX, inner.getY(), maxNameW, headerH), juce::Justification::centredLeft, true);
+        if (hasPart)
+        {
+            auto partFont = Fonts::get (500, plugin ? 12.0f : 13.0f);
+            g.setColour (col::inkSub);
+            g.setFont (partFont);
+            if (plugin)
+                g.drawText (parts::label (member.part), juce::Rectangle<int> (nameX + nameW + 6, inner.getY(), 80, headerH), juce::Justification::centredLeft, false);
+            else
+                g.drawText (parts::label (member.part), juce::Rectangle<int> (nameX, inner.getY() + headerH + 4, maxNameW, (int) std::ceil (partFont.getHeight())),
+                            juce::Justification::centredLeft, false);
+        }
 
         // 핑 (오른쪽). 18 ms 초과는 숫자 색 + 카드 테두리 + 하단 문구로만 표시
         juce::String pingText = (off || ! member.hasStats) ? TXT ("— ms") : juce::String ((int) std::lround (member.pingMs)) + " ms";
@@ -273,10 +325,17 @@ private:
     const int slot;
     LevelBar meter;
     VolumeSlider volume;
-    MeonButton muteButton;
+    MeonButton muteButton, resetButton;
     MeonSession::Member member;
     bool haveMember = false, syncing = false;
     juce::Rectangle<int> volTextArea, volLabelArea, statusArea;
+
+    /** 머리 영역 높이: 앱은 이름 줄 + 4 + 파트 이름 줄, 플러그인은 이름 줄 하나 */
+    int headerHeight() const
+    {
+        const int nameH = (int) std::ceil (Fonts::get (700, plugin ? 18.0f : 24.0f).getHeight());
+        return plugin ? nameH : nameH + 4 + (int) std::ceil (Fonts::get (500, 13.0f).getHeight());
+    }
 };
 
 //==============================================================================

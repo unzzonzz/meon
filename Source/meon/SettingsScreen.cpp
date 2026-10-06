@@ -31,6 +31,8 @@ void SettingsScreen::LinkLabel::paintButton (juce::Graphics& g, bool over, bool)
 SettingsScreen::Content::Content (SettingsScreen& o)
     : owner (o), plugin (o.plugin),
       nickInput (o.plugin ? 14.0f : 15.0f),
+      partSelector (o.plugin ? PartSelector::Style { 6, 22.0f, 8, 13.0f, 500 }
+                             : PartSelector::Style { 8, 28.0f, 10, 14.0f, 500 }),
       driverPanelButton (TXT ("드라이버 설정")),
       saveButton (TXT ("저장")), logButton (TXT ("로그 폴더 열기")),
       licenseLink (o.plugin ? TXT ("전문 보기") : TXT ("라이선스 전문 보기"), "https://www.gnu.org/licenses/gpl-3.0.html", o.plugin ? 13.0f : 14.0f),
@@ -43,6 +45,13 @@ SettingsScreen::Content::Content (SettingsScreen& o)
     nickInput.onReturnKey = [this] { saveNickname(); };
     saveButton.setFont (plugin ? 13.0f : 14.0f, 500);
     saveButton.onClick = [this] { saveNickname(); };
+    // 파트는 누르는 즉시 저장. 방 밖이면 바로 다시 연결해 이름에 반영, 합주 중이면 다음 입장부터
+    partSelector.setSelected (parts::fromKey (owner.editor.getSettings().getPartKey()));
+    partSelector.onChange = [this] (Part p)
+    {
+        owner.editor.getSettings().setPartKey (parts::key (p));
+        owner.editor.getSession().applyNicknameChange();
+    };
     logButton.setFont (plugin ? 13.0f : 14.0f, 500);
     logButton.onClick = []
     {
@@ -78,6 +87,7 @@ SettingsScreen::Content::Content (SettingsScreen& o)
     }
     addAndMakeVisible (nickInput);
     addAndMakeVisible (saveButton);
+    addAndMakeVisible (partSelector);
     addAndMakeVisible (logButton);
     addAndMakeVisible (licenseLink);
     if (! plugin)
@@ -261,10 +271,18 @@ void SettingsScreen::Content::layout (int width, int topPad)
         nickInput.setBounds (0, y, width - saveW - (plugin ? 8 : 10), ctrlH);
         saveButton.setBounds (width - saveW, y, saveW, ctrlH);
         y += ctrlH;
+    }
+    y += sectionGap;   // 닉네임과 파트 사이는 구분선 없이 간격만
+
+    sectionTitle (TXT ("파트"));
+    {
+        const int cellH = plugin ? 72 : 84;
+        partSelector.setBounds (0, y, width, cellH);
+        y += cellH;
         if (! plugin)
         {
             y += 14;
-            subTexts.push_back ({ TXT ("합주 중에 바꾸면 다음 입장부터 적용돼요"), juce::Rectangle<int> (0, y, width, 16) });
+            subTexts.push_back ({ TXT ("닉네임과 파트는 합주 중에 바꾸면 다음 입장부터 적용돼요"), juce::Rectangle<int> (0, y, width, 16) });
             y += 16;
         }
     }
@@ -454,10 +472,10 @@ void SettingsScreen::resized()
     const int cw = closeButton.getIdealWidth (plugin ? 14 : 16);
     closeButton.setBounds (header.getRight() - (plugin ? 14 : 20) - cw, header.getCentreY() - (plugin ? 15 : 17), cw, plugin ? 30 : 34);
 
-    const int padY = plugin ? 28 : 36;
+    const int padTop = plugin ? 28 : 40, padBottom = plugin ? 36 : 48;
     const int w = plugin ? 560 : 720;
-    content.layout (w, padY);
-    content.setSize (w, content.getHeight() + padY);   // 아래 여백
+    content.layout (w, padTop);
+    content.setSize (w, content.getHeight() + padBottom);   // 아래 여백
     viewport.setBounds (r.getCentreX() - w / 2, r.getY(), w + 12, r.getHeight());
 }
 

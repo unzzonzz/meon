@@ -65,18 +65,27 @@ void OnboardingPage::resized()
 //==============================================================================
 NicknameScreen::NicknameScreen (MeonEditor& e)
     : OnboardingPage (e, 1, e.isPluginMode() ? 2 : 4,
-                      TXT ("어떻게 불러드릴까요"),
-                      e.isPluginMode() ? TXT ("합주 방에서 멤버들에게 보이는 이름이에요.")
-                                       : TXT ("합주 방에서 멤버들에게 보이는 이름이에요. 나중에 설정에서 바꿀 수 있어요.")),
+                      TXT ("이름과 파트를 알려주세요"),
+                      e.isPluginMode() ? TXT ("합주 방에서 멤버들에게 보이는 이름과 파트예요.")
+                                       : TXT ("합주 방에서 멤버들에게 보이는 이름과 파트예요. 나중에 설정에서 바꿀 수 있어요.")),
       fieldLabel (TXT ("닉네임"), 13.0f, 500, col::inkSub),
       fieldHint (TXT ("한글·영문·숫자 2–12자"), 13.0f, 400, col::disabled),
-      input (e.isPluginMode() ? 16.0f : 17.0f)
+      partLabel (TXT ("파트"), 13.0f, 500, col::inkSub),
+      input (e.isPluginMode() ? 16.0f : 17.0f),
+      partSelector (e.isPluginMode() ? PartSelector::Style { 8, 24.0f, 8, 14.0f, 600 }
+                                     : PartSelector::Style { 10, 28.0f, 10, 15.0f, 600 })
 {
     footerNote.setText (plugin ? TXT ("오디오 장치는 DAW 설정을 따릅니다") : TXT ("계정이나 로그인은 필요 없어요"));
     addAndMakeVisible (fieldLabel);
     addAndMakeVisible (input);
     if (! plugin)
         addAndMakeVisible (fieldHint);
+    addAndMakeVisible (partLabel);
+    addAndMakeVisible (partSelector);
+
+    // 첫 실행은 기본 선택 없음 (이미 고른 적 있으면 그 값)
+    partSelector.setSelected (parts::fromKey (editor.getSettings().getPartKey()));
+    partSelector.onChange = [this] (Part) { validate(); };
 
     input.setText (editor.getSettings().getNickname(), juce::dontSendNotification);
     input.setInputRestrictions (12);
@@ -97,13 +106,15 @@ void NicknameScreen::parentHierarchyChanged()
 
 void NicknameScreen::validate()
 {
-    nextButton.setEnabled (MeonSettings::isValidNickname (input.getText()));
+    // 닉네임 2자 이상 + 파트 선택 시 다음 활성
+    nextButton.setEnabled (MeonSettings::isValidNickname (input.getText()) && partSelector.getSelected() != Part::None);
 }
 
 void NicknameScreen::submit()
 {
-    if (! MeonSettings::isValidNickname (input.getText()))
+    if (! MeonSettings::isValidNickname (input.getText()) || partSelector.getSelected() == Part::None)
         return;
+    editor.getSettings().setPartKey (parts::key (partSelector.getSelected()));
     editor.getSettings().setNickname (input.getText().trim());
     editor.getSession().start();
     editor.go (plugin ? MeonEditor::Screen::Headphone : MeonEditor::Screen::Audio);
@@ -115,8 +126,18 @@ void NicknameScreen::layoutBody (juce::Rectangle<int> body)
     const int inputH = plugin ? 44 : 48;
     int y = body.getY() + (plugin ? 28 : 40);
     fieldLabel.setBounds (body.getX(), y, w, 16); y += 16 + 8;
-    input.setBounds (body.getX(), y, w, inputH); y += inputH + 8;
-    fieldHint.setBounds (body.getX(), y, w, 16);
+    input.setBounds (body.getX(), y, w, inputH); y += inputH;
+    if (! plugin)
+    {
+        y += 8;
+        fieldHint.setBounds (body.getX(), y, w, 16); y += 16;
+    }
+
+    // 파트: 닉네임 아래 32(플러그인 24) · 6칸 균등
+    const int partW = plugin ? 600 : 680, cellH = plugin ? 72 : 88;
+    y += plugin ? 24 : 32;
+    partLabel.setBounds (body.getX(), y, partW, 16); y += 16 + 8;
+    partSelector.setBounds (body.getX(), y, partW, cellH);
 }
 
 //==============================================================================

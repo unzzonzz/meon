@@ -4,6 +4,7 @@
 #include "MeonEditor.h"
 #include "MeonWidgets.h"
 #include "MeonAudio.h"
+#include "MeonParts.h"
 
 namespace meon
 {
@@ -50,6 +51,7 @@ private:
         MeonButton driverPanelButton;
         LevelBar meter;
         MeonTextEditor nickInput;
+        PartSelector partSelector;
         MeonButton saveButton, logButton;
         LinkLabel licenseLink, sourceLink;
         juce::Rectangle<int> levelTextArea;
