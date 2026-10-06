@@ -537,21 +537,19 @@ private:
                 const int h = itemHeight (m, width);
                 if (m.kind == MeonSession::ChatMessage::System)
                 {
-                    g.setColour (col::disabled);
-                    g.setFont (Fonts::get (400, plugin ? 11.0f : 12.0f));
-                    g.drawText (koreanTime (m.time) + TXT (" · ") + m.text, juce::Rectangle<int> (pad, y, width, h), juce::Justification::centred, true);
+                    drawLineWithEmoji (g, koreanTime (m.time) + TXT (" · ") + m.text, Fonts::get (400, plugin ? 11.0f : 12.0f), col::disabled,
+                                       juce::Rectangle<int> (pad, y, width, h).toFloat(), juce::Justification::centred);
                 }
                 else
                 {
                     const bool mine = m.kind == MeonSession::ChatMessage::Mine;
                     const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
-                    g.setColour (mine ? col::accentText : col::inkSub);
-                    g.setFont (Fonts::get (600, plugin ? 12.0f : 13.0f));
-                    g.drawText (mine ? TXT ("나") : m.from, juce::Rectangle<int> (pad, y, width, nameH), mine ? juce::Justification::centredRight : juce::Justification::centredLeft, true);
+                    drawLineWithEmoji (g, mine ? TXT ("나") : m.from, Fonts::get (600, plugin ? 12.0f : 13.0f), mine ? col::accentText : col::inkSub,
+                                       juce::Rectangle<int> (pad, y, width, nameH).toFloat(), mine ? juce::Justification::centredRight : juce::Justification::centredLeft);
                     const float msgPx = plugin ? 13.0f : 15.0f;
-                    drawParagraph (g, m.text, Fonts::get (400, msgPx), col::ink,
-                                   juce::Rectangle<float> ((float) pad, (float) (y + nameH + (plugin ? 2 : 3)), (float) width, (float) (h - nameH)),
-                                   msgPx * 1.5f, mine ? juce::Justification::topRight : juce::Justification::topLeft);
+                    drawParagraphWithEmoji (g, m.text, Fonts::get (400, msgPx), col::ink,
+                                            juce::Rectangle<float> ((float) pad, (float) (y + nameH + (plugin ? 2 : 3)), (float) width, (float) (h - nameH)),
+                                            msgPx * 1.5f, mine ? juce::Justification::topRight : juce::Justification::topLeft);
                 }
                 y += h + gap;
             }
@@ -635,15 +633,11 @@ public:
 
         auto nameFont = Fonts::get (600, plugin ? 13.0f : 14.0f);
         const juce::String name = last->kind == MeonSession::ChatMessage::Mine ? TXT ("나") : last->from;
-        const float nw = juce::jmin (nameFont.getStringWidthFloat (name) + 2.0f, inner.getWidth() * 0.4f);
-        g.setColour (col::inkSub);
-        g.setFont (nameFont);
-        g.drawText (name, inner.removeFromLeft (nw), juce::Justification::centredLeft, true);
+        const float nw = juce::jmin (lineWidthWithEmoji (name, nameFont) + 2.0f, inner.getWidth() * 0.4f);
+        drawLineWithEmoji (g, name, nameFont, col::inkSub, inner.removeFromLeft (nw));
         inner.removeFromLeft (gap);
 
-        g.setColour (col::ink);
-        g.setFont (Fonts::get (400, plugin ? 14.0f : 15.0f));
-        g.drawText (last->text.replaceCharacters ("\r\n", "  "), inner, juce::Justification::centredLeft, true);   // 넘치면 말줄임
+        drawLineWithEmoji (g, last->text, Fonts::get (400, plugin ? 14.0f : 15.0f), col::ink, inner);   // 넘치면 말줄임
     }
 
 private:

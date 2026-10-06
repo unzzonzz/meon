@@ -146,7 +146,75 @@ MeonTextEditor::MeonTextEditor (float fontPx, int weight)
     setScrollbarsShown (false);
     setPopupMenuEnabled (false);
     setColour (juce::TextEditor::backgroundColourId, col::white);
-    setColour (juce::TextEditor::textColourId, col::ink);
+    setColour (juce::TextEditor::textColourId, juce::Colours::transparentBlack);
+    setColour (juce::TextEditor::highlightedTextColourId, juce::Colours::transparentBlack);
+}
+
+// Pretendard 에 없는 이모지 글자인가 (키캡 #️⃣ 처럼 뒤에 FE0F/20E3 가 붙는 글자도 포함)
+static bool isEmojiAt (const juce::String& text, int i)
+{
+    auto isEmoji = [] (juce::juce_wchar c)
+    {
+        return c >= 0x1F000 || (c >= 0x2300 && c <= 0x23FF) || (c >= 0x2600 && c <= 0x27BF) || (c >= 0x2B00 && c <= 0x2BFF)
+            || c == 0x200D || (c >= 0xFE00 && c <= 0xFE0F) || c == 0x20E3 || (c >= 0xE0000 && c <= 0xE007F);
+    };
+    if (isEmoji (text[i]))
+        return true;
+    const auto next = i + 1 < text.length() ? text[i + 1] : 0;
+    return next == 0xFE0F || next == 0x20E3;
+}
+
+void MeonTextEditor::paintOverChildren (juce::Graphics& g)
+{
+    const auto text = getText();
+    const int n = text.length();
+    if (n > 0)
+    {
+        // 한 줄 입력창만 쓴다. 커서·선택 영역과 어긋나지 않도록 글자마다 JUCE 가 정한 x 위치에 그린다.
+        // 이모지는 JUCE 가 잰 폭이 CoreText 로 그린 폭보다 좁아서, JUCE 가 준 칸에 맞게 줄여 그린다.
+        const auto font = getFont();
+        const auto line = getTextBounds ({ 0, n }).getBounds();
+        const float baseline = (float) line.getY() + (float) juce::roundToInt (font.getAscent());
+        auto xAt = [this] (int index) { return (float) getCaretRectangleForCharIndex (index).getX(); };
+
+        juce::Graphics::ScopedSaveState state (g);
+        g.reduceClipRegion (getBorder().subtractedFrom (getLocalBounds()));
+        g.setColour (col::ink);
+
+        for (int i = 0; i < n;)
+        {
+            const bool emoji = isEmojiAt (text, i);
+            int j = i + 1;
+            while (j < n && isEmojiAt (text, j) == emoji)
+                ++j;
+
+            const auto part = text.substring (i, j);
+            const float x0 = xAt (i), slot = xAt (j) - x0;
+
+            if (! emoji)
+            {
+                juce::GlyphArrangement ga;
+                ga.addLineOfText (font, part, x0, baseline);
+                ga.draw (g);
+            }
+            else if (slot > 0.0f)
+            {
+                const float natural = lineWidthWithEmoji (part, font);
+                const auto f = natural > 0.0f ? font.withHeight (font.getHeight() * juce::jlimit (0.5f, 1.5f, slot / natural)) : font;
+
+                juce::AttributedString as;
+                as.setWordWrap (juce::AttributedString::none);
+                as.append (part, f, col::ink);
+                juce::TextLayout layout;
+                layout.createLayout (as, 1.0e6f);
+                const float firstBaseline = layout.getNumLines() > 0 ? layout.getLine (0).lineOrigin.y : f.getAscent();
+                as.draw (g, { x0, baseline - firstBaseline, slot + f.getHeight(), f.getHeight() * 3.0f });
+            }
+            i = j;
+        }
+    }
+
+    juce::TextEditor::paintOverChildren (g);
 }
 
 void MeonTextEditor::setPlaceholder (const juce::String& text)

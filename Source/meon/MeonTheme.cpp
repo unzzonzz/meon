@@ -79,6 +79,58 @@ float paragraphHeight (const juce::String& text, const juce::Font& font, float w
     return layout.getHeight();
 }
 
+void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
+                             juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification)
+{
+    juce::AttributedString as;
+    as.setJustification (justification);
+    as.append (text, font, colour);
+    as.setLineSpacing (juce::jmax (0.0f, lineHeightPx - font.getHeight()));
+
+    // macOS 의 CTFrame 은 영역에 다 들어가지 않는 마지막 줄을 아예 빼 버린다. 위쪽 정렬이면 아래로 여유를 준다.
+    if (justification.getOnlyVerticalFlags() == juce::Justification::top)
+        area = area.withHeight (area.getHeight() + lineHeightPx * 2.0f);
+
+    as.draw (g, area);   // macOS: CoreText 로 그려 컬러 이모지가 나온다. 그 외: TextLayout 으로 그린다.
+}
+
+float lineWidthWithEmoji (const juce::String& text, const juce::Font& font)
+{
+    juce::AttributedString as;
+    as.append (text, font, juce::Colours::black);
+    as.setWordWrap (juce::AttributedString::none);
+    juce::TextLayout layout;
+    layout.createLayout (as, 1.0e6f);
+    return layout.getNumLines() > 0 ? layout.getLine (0).getLineBoundsX().getLength() : 0.0f;
+}
+
+void drawLineWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
+                        juce::Rectangle<float> area, juce::Justification justification)
+{
+    auto shown = text.replaceCharacters ("\r\n", "  ");
+    if (lineWidthWithEmoji (shown, font) > area.getWidth())
+    {
+        // 들어가는 가장 긴 앞부분 + '…' (글자 수로 이분 탐색)
+        const juce::String ellipsis = juce::String::charToString ((juce::juce_wchar) 0x2026);
+        int lo = 0, hi = shown.length();
+        while (lo < hi)
+        {
+            const int mid = (lo + hi + 1) / 2;
+            if (lineWidthWithEmoji (shown.substring (0, mid).trimEnd() + ellipsis, font) <= area.getWidth())
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+        shown = shown.substring (0, lo).trimEnd() + ellipsis;
+    }
+
+    juce::AttributedString as;
+    as.setJustification (justification);
+    as.setWordWrap (juce::AttributedString::none);
+    as.append (shown, font, colour);
+    as.draw (g, area);
+}
+
 float textWidth (const juce::Font& font, const juce::String& text)
 {
     return font.getStringWidthFloat (text);

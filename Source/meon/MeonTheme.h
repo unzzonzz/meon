@@ -78,6 +78,20 @@ void drawParagraph (juce::Graphics& g, const juce::String& text, const juce::Fon
 /** 문단이 차지할 높이를 계산한다. */
 float paragraphHeight (const juce::String& text, const juce::Font& font, float width, float lineHeightPx);
 
+/** drawParagraph 와 같지만 이모지 같은, Pretendard 에 없는 글자도 그린다.
+    macOS 는 CoreText 로 직접 그려 컬러 이모지가 나오고, 다른 OS 는 TextLayout(대체 글꼴 윤곽선)으로 그린다.
+    높이는 paragraphHeight 로 잰다 (둘 다 같은 대체 글꼴 배치를 쓴다). */
+void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
+                             juce::Rectangle<float> area, float lineHeightPx,
+                             juce::Justification justification = juce::Justification::topLeft);
+
+/** 한 줄 텍스트를 이모지까지 그린다. 넘치면 끝을 '…' 로 줄인다. */
+void drawLineWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
+                        juce::Rectangle<float> area, juce::Justification justification = juce::Justification::centredLeft);
+
+/** 대체 글꼴까지 반영한 한 줄 텍스트 폭 */
+float lineWidthWithEmoji (const juce::String& text, const juce::Font& font);
+
 /** 텍스트 폭 */
 float textWidth (const juce::Font& font, const juce::String& text);
 

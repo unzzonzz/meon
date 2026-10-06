@@ -12,7 +12,7 @@ MeonLookAndFeel::MeonLookAndFeel()
 
     setColour (juce::TextEditor::backgroundColourId, col::white);
     setColour (juce::TextEditor::textColourId, col::ink);
-    setColour (juce::TextEditor::highlightColourId, col::accent.withAlpha (0.25f));
+    setColour (juce::TextEditor::highlightColourId, col::accent.withAlpha (0.5f));   // 흰 바탕에서 선택 영역이 보이게
     setColour (juce::TextEditor::highlightedTextColourId, col::ink);
     setColour (juce::TextEditor::outlineColourId, col::border);
     setColour (juce::TextEditor::focusedOutlineColourId, col::accent);

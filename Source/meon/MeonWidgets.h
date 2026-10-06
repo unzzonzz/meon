@@ -70,6 +70,10 @@ public:
 
     /** 한글 입력기가 조합 중인 글자(마지막 음절)에 JUCE 가 점선 밑줄을 그리는데, macOS 기본 입력창처럼 표시하지 않는다. */
     void setTemporaryUnderlining (const juce::Array<juce::Range<int>>&) override {}
+
+    /** 글자는 여기서 직접 그린다. JUCE 7 TextEditor 는 폭은 대체 글꼴로 재면서 그리기는 Pretendard 로 해서
+        이모지가 엉뚱한 글자로 나온다. 이모지만 CoreText 로 그린다. (기본 글자색은 투명, 커서·선택 영역은 JUCE 가 그대로 그린다) */
+    void paintOverChildren (juce::Graphics&) override;
 };
 
 //==============================================================================
