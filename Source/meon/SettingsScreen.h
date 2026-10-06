@@ -39,7 +39,7 @@ private:
     {
     public:
         explicit Content (SettingsScreen& owner);
-        void layout (int width);
+        void layout (int width, int topPad);
         void paint (juce::Graphics&) override;
         void refreshDevices();
         void pushLevel (float db, double dt) { meter.push (db, dt); repaint (levelTextArea); }

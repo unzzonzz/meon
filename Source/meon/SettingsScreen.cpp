@@ -203,7 +203,7 @@ void SettingsScreen::Content::saveNickname()
     juce::Timer::callAfterDelay (1500, [safe] { if (safe != nullptr) safe->saveButton.setLabel (TXT ("저장")); });
 }
 
-void SettingsScreen::Content::layout (int width)
+void SettingsScreen::Content::layout (int width, int topPad)
 {
     sectionTitles.clear(); rowLabels.clear(); infoRows.clear(); texts.clear(); subTexts.clear(); dividers.clear();
     const int labelW = plugin ? 100 : 120;
@@ -212,7 +212,7 @@ void SettingsScreen::Content::layout (int width)
     const int titleH = (int) std::ceil (Fonts::get (700, titlePx).getHeight());
     const int sectionGap = plugin ? 24 : 32;
     const int titleGap = plugin ? 12 : 14;
-    int y = 0;
+    int y = topPad;   // 위 여백은 스크롤 영역 안에 둔다 (헤더 바로 아래에서 잘리지 않게)
 
     auto sectionTitle = [&] (const juce::String& t)
     {
@@ -456,9 +456,8 @@ void SettingsScreen::resized()
 
     const int padY = plugin ? 28 : 36;
     const int w = plugin ? 560 : 720;
-    content.layout (w);
+    content.layout (w, padY);
     content.setSize (w, content.getHeight() + padY);   // 아래 여백
-    r.removeFromTop (padY);                            // 위 여백
     viewport.setBounds (r.getCentreX() - w / 2, r.getY(), w + 12, r.getHeight());
 }
 
