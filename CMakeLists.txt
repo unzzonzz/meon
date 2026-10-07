@@ -44,6 +44,8 @@ endif()
 project(MEON VERSION 1.0.0)
 
 set(BUILDVERSION 1)
+# CI 빌드 번호 (GitHub Actions run_number). 0 이면 로컬 빌드: 자동 업데이트를 끈다.
+set(MEON_BUILD_ID 0 CACHE STRING "MEON CI build number (0 = local build)")
 
 
 # If you've installed JUCE somehow (via a package manager, or directly using the CMake install
@@ -302,6 +304,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/meon/SettingsScreen.h
         Source/meon/MeonAudio.cpp
         Source/meon/MeonAudio.h
+        Source/meon/MeonUpdater.cpp
+        Source/meon/MeonUpdater.h
     )
     set(AOOSourceFiles        
         deps/aoo/lib/src/SLIP.hpp
@@ -428,6 +432,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         SONOBUS_BUILD_VERSION="${PROJECT_VERSION}"
         MEON_BUILD_VERSION="${PROJECT_VERSION}"
         MEON_BUILD_NUMBER=${BUILDVERSION}
+        MEON_BUILD_ID=${MEON_BUILD_ID}
         ${PLAT_COMPILE_DEFS} )
 
     # 아이콘: JUCE 는 ICON_BIG 하나를 축소해 모든 크기를 만든다. MEON 은 작은 크기에서 M 만 쓰는

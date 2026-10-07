@@ -34,9 +34,10 @@ SettingsScreen::Content::Content (SettingsScreen& o)
       partSelector (o.plugin ? PartSelector::Style { 6, 22.0f, 8, 13.0f, 500 }
                              : PartSelector::Style { 8, 28.0f, 10, 14.0f, 500 }),
       driverPanelButton (TXT ("드라이버 설정")),
-      saveButton (TXT ("저장")), logButton (TXT ("로그 폴더 열기")),
+      saveButton (TXT ("저장")), logButton (TXT ("로그 폴더 열기")), updateButton (TXT ("다시 확인")),
       licenseLink (o.plugin ? TXT ("전문 보기") : TXT ("라이선스 전문 보기"), "https://www.gnu.org/licenses/gpl-3.0.html", o.plugin ? 13.0f : 14.0f),
-      sourceLink (TXT ("소스 코드"), "https://github.com/unzzonzz/meon", 14.0f)
+      sourceLink (TXT ("소스 코드"), "https://github.com/unzzonzz/meon", 14.0f),
+      showUpdate (! o.plugin && MeonUpdater::isSupported())
 {
     meter.setCornerRadius (3.0f);
     nickInput.setIndents (12, 0);
@@ -89,6 +90,23 @@ SettingsScreen::Content::Content (SettingsScreen& o)
     addAndMakeVisible (saveButton);
     addAndMakeVisible (partSelector);
     addAndMakeVisible (logButton);
+    if (showUpdate)
+    {
+        updateButton.setFont (14.0f, 500);
+        updateButton.onClick = [this]
+        {
+            auto& updater = owner.editor.getUpdater();
+            switch (updater.getState())
+            {
+                case MeonUpdater::State::Available: owner.editor.startUpdate(); break;
+                case MeonUpdater::State::Ready:     owner.editor.installUpdate(); break;
+                default:                            updater.check(); break;
+            }
+        };
+        addAndMakeVisible (updateButton);
+        inRoom = owner.editor.getSession().isInRoom();
+        refreshUpdate();
+    }
     addAndMakeVisible (licenseLink);
     if (! plugin)
         addAndMakeVisible (sourceLink);
@@ -196,6 +214,74 @@ void SettingsScreen::Content::applyBuffer()
     if (owner.editor.saveSettingsIfNeeded)
         owner.editor.saveSettingsIfNeeded();
     refreshDevices();
+}
+
+juce::String SettingsScreen::Content::updateTitle() const
+{
+    auto& u = owner.editor.getUpdater();
+    switch (u.getState())
+    {
+        case MeonUpdater::State::Idle:
+        case MeonUpdater::State::Checking:    return TXT ("새 버전을 확인하고 있어요");
+        case MeonUpdater::State::UpToDate:    return TXT ("최신 버전이에요");
+        case MeonUpdater::State::Available:   return TXT ("새 버전이 있어요");
+        case MeonUpdater::State::Downloading:
+        {
+            const float p = u.getProgress();
+            return TXT ("새 버전을 받는 중이에요") + (p >= 0.0f ? " " + juce::String ((int) std::floor (p * 100.0f)) + "%" : juce::String());
+        }
+        case MeonUpdater::State::Ready:       return TXT ("설치할 준비가 됐어요");
+        case MeonUpdater::State::Failed:      return u.lastFailureWasDownload() ? TXT ("새 버전을 받지 못했어요") : TXT ("새 버전을 확인하지 못했어요");
+    }
+    return {};
+}
+
+juce::String SettingsScreen::Content::updateDetail() const
+{
+    auto& u = owner.editor.getUpdater();
+    const auto now = "build " + juce::String (MeonUpdater::currentBuild());
+    switch (u.getState())
+    {
+        case MeonUpdater::State::Available:
+        case MeonUpdater::State::Ready:
+            return now + TXT (" → build ") + juce::String (u.getLatestBuild())
+                   + (inRoom ? TXT (" · 합주가 끝나면 업데이트할 수 있어요") : TXT (" · 업데이트하면 앱이 다시 켜져요"));
+        case MeonUpdater::State::Downloading:
+            return now + TXT (" → build ") + juce::String (u.getLatestBuild()) + TXT (" · 다 받으면 앱이 다시 켜져요");
+        case MeonUpdater::State::Failed:
+            return TXT ("인터넷 연결을 확인하고 다시 시도해 주세요");
+        default:
+            return now;
+    }
+}
+
+void SettingsScreen::Content::refreshUpdate()
+{
+    if (! showUpdate)
+        return;
+    const auto st = owner.editor.getUpdater().getState();
+    juce::String label;
+    switch (st)
+    {
+        case MeonUpdater::State::Idle:
+        case MeonUpdater::State::Checking:    label = TXT ("확인 중"); break;
+        case MeonUpdater::State::Available:   label = TXT ("업데이트"); break;
+        case MeonUpdater::State::Downloading: label = TXT ("받는 중"); break;
+        case MeonUpdater::State::Ready:       label = TXT ("다시 켜서 설치"); break;
+        case MeonUpdater::State::Failed:      label = TXT ("다시 시도"); break;
+        case MeonUpdater::State::UpToDate:    label = TXT ("다시 확인"); break;
+    }
+    const bool install = st == MeonUpdater::State::Available || st == MeonUpdater::State::Ready;
+    updateButton.setStyle (install ? MeonButton::Style::Primary : MeonButton::Style::Secondary);
+    updateButton.setEnabled (st != MeonUpdater::State::Idle && st != MeonUpdater::State::Checking
+                             && st != MeonUpdater::State::Downloading && ! (install && inRoom));
+    if (label != updateButton.getLabel())
+    {
+        updateButton.setLabel (label);
+        if (getParentComponent() != nullptr)
+            owner.resized();
+    }
+    repaint (updateArea);
 }
 
 void SettingsScreen::Content::saveNickname()
@@ -306,6 +392,17 @@ void SettingsScreen::Content::layout (int width, int topPad)
     }
     divider();
 
+    if (showUpdate)
+    {
+        // 문제 해결과 같은 모양: 왼쪽 두 줄(상태 · 빌드), 오른쪽 버튼
+        sectionTitle (TXT ("업데이트"));
+        const int btnW = updateButton.getIdealWidth (18);
+        updateArea = juce::Rectangle<int> (0, y, width - btnW - 16, 18 + 4 + 16);
+        updateButton.setBounds (width - btnW, y + (18 + 4 + 16) / 2 - ctrlH / 2, btnW, ctrlH);
+        y += 18 + 4 + 16;
+        divider();
+    }
+
     sectionTitle (TXT ("앱 정보"));
     {
         const float px = plugin ? 13.0f : 14.0f;
@@ -357,6 +454,16 @@ void SettingsScreen::Content::paint (juce::Graphics& g)
     g.setFont (Fonts::get (400, plugin ? 12.0f : 13.0f));
     for (auto& t : subTexts)
         g.drawText (t.first, t.second, juce::Justification::centredLeft, true);
+
+    if (showUpdate && ! updateArea.isEmpty())
+    {
+        g.setColour (col::ink);
+        g.setFont (Fonts::get (400, 15.0f));
+        g.drawText (updateTitle(), updateArea.withHeight (18), juce::Justification::centredLeft, true);
+        g.setColour (col::disabled);
+        g.setFont (Fonts::get (400, 13.0f));
+        g.drawText (updateDetail(), updateArea.withTrimmedTop (18 + 4).withHeight (16), juce::Justification::centredLeft, true);
+    }
 
     if (plugin && ! audioPanel.isEmpty())
     {
@@ -413,6 +520,8 @@ SettingsScreen::SettingsScreen (MeonEditor& e)
     addAndMakeVisible (viewport);
     if (auto* dm = editor.deviceManager())
         dm->addChangeListener (this);
+    if (content.showUpdate)
+        editor.getUpdater().addChangeListener (this);
     lastTickMs = juce::Time::getMillisecondCounterHiRes();
     startTimerHz (30);
 }
@@ -421,11 +530,15 @@ SettingsScreen::~SettingsScreen()
 {
     if (auto* dm = editor.deviceManager())
         dm->removeChangeListener (this);
+    editor.getUpdater().removeChangeListener (this);
 }
 
-void SettingsScreen::changeListenerCallback (juce::ChangeBroadcaster*)
+void SettingsScreen::changeListenerCallback (juce::ChangeBroadcaster* source)
 {
-    content.refreshDevices();
+    if (source == &editor.getUpdater())
+        content.refreshUpdate();
+    else
+        content.refreshDevices();
 }
 
 void SettingsScreen::timerCallback()
@@ -435,6 +548,11 @@ void SettingsScreen::timerCallback()
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);
     lastTickMs = now;
+    if (content.showUpdate && content.inRoom != editor.getSession().isInRoom())
+    {
+        content.inRoom = editor.getSession().isInRoom();   // 합주 중에는 업데이트 버튼을 막는다
+        content.refreshUpdate();
+    }
     const int ch = editor.getSettings().getInputChannelStart();
     float db = editor.getSession().getMyInputLevelDb (ch);
     if (editor.getSettings().getInputChannelCount() == 2)

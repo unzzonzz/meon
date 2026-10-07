@@ -6,6 +6,7 @@
 #include "MeonLookAndFeel.h"
 #include "MeonSettings.h"
 #include "MeonSession.h"
+#include "MeonUpdater.h"
 
 namespace meon
 {
@@ -51,6 +52,11 @@ public:
     void closeSettings();
     bool isSettingsOpen() const { return settingsOverlay != nullptr; }
 
+    /** Windows 독립 앱 업데이트. 받기가 끝나면(합주 중이 아니면) 바로 설치 프로그램을 실행하고 앱을 끈다. */
+    MeonUpdater& getUpdater()               { return *updater; }
+    void startUpdate();
+    void installUpdate();
+
     void copyRoomCodeToClipboard();
     void saveAll();
 
@@ -73,6 +79,7 @@ private:
     MeonLookAndFeel lookAndFeel;
     std::unique_ptr<MeonSettings> settings;
     std::unique_ptr<MeonSession> session;
+    std::unique_ptr<MeonUpdater> updater;
     const bool pluginMode;
 
     /** 120 ms 페이드 (알파만 바꾼다. ComponentAnimator 는 bounds 까지 되돌리므로 쓰지 않는다) */

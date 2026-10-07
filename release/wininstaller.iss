@@ -51,3 +51,11 @@ Name: "{autodesktop}\MEON"; Filename: "{app}\MEON.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\MEON.exe"; Description: "MEON 실행"; Flags: nowait postinstall skipifsilent
+; 앱 안의 업데이트(/SILENT /UPDATE=1)로 설치했으면 끝난 뒤 앱을 다시 켠다 (관리자 권한이 아닌 원래 사용자로)
+Filename: "{app}\MEON.exe"; Flags: nowait runasoriginaluser; Check: IsAppUpdate
+
+[Code]
+function IsAppUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
+end;

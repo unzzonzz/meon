@@ -9,7 +9,8 @@ namespace meon
 
 class HomeScreen : public ScreenBase,
                    private MeonSession::Listener,
-                   private juce::Timer
+                   private juce::Timer,
+                   private juce::ChangeListener
 {
 public:
     explicit HomeScreen (MeonEditor&);
@@ -18,12 +19,27 @@ public:
     void paint (juce::Graphics&) override;
 
 private:
+    /** 새 버전 알림 (Windows 독립 앱). 위쪽 가운데, 설정 버튼과 같은 높이. 누르면 받고 → 앱이 다시 켜진다. */
+    class UpdateNotice : public juce::Button
+    {
+    public:
+        explicit UpdateNotice (MeonEditor&);
+        void refresh();
+        int getIdealWidth() const;
+        void paintButton (juce::Graphics&, bool, bool) override;
+    private:
+        MeonEditor& editor;
+        juce::String message, action;
+    };
+
     MeonEditor& editor;
     const bool plugin;
     MeonButton settingsButton, createButton, joinButton;
+    UpdateNotice updateNotice;
     juce::Rectangle<int> centre, footer;
 
     void updateState();
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void sessionStateChanged() override { updateState(); }
     void timerCallback() override { repaint (footer); }
 };
