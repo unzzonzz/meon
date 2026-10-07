@@ -54,6 +54,14 @@ Visual Studio 2019 이상 + CMake. **ASIO SDK 2.3.4 이상**이 필요합니다 
 
 서명·공증을 하지 않은 빌드입니다. 경고를 넘기는 방법과 플러그인 설치 위치는 [doc/INSTALL.md](doc/INSTALL.md)를 보세요.
 
+## 코드 서명 정책
+
+Windows 설치 파일의 무료 코드 서명은 [SignPath.io](https://about.signpath.io)가 제공하고, 인증서는 [SignPath Foundation](https://signpath.org)이 발급합니다.
+
+- 서명 대상: 이 저장소의 GitHub Actions(`.github/workflows/windows.yml`)가 `main` 브랜치 소스로 빌드한 설치 파일만 서명합니다. 로컬 빌드는 서명하지 않습니다.
+- 커미터·리뷰어·승인자: [@unzzonzz](https://github.com/unzzonzz)
+- 개인정보: 방에 들어갈 때 연결 서버(기본 `aoo.sonobus.net`)에 닉네임·방 이름·네트워크 주소를 보내고, 오디오는 같은 방 멤버에게 보냅니다. 그 밖의 정보는 사용자가 요청하지 않는 한 외부로 보내지 않습니다.
+
 ## 로그
 
 방에 있는 동안 멤버별 핑·지연·지터버퍼·패킷 손실·끊김 횟수를 5초마다 JSON 으로 기록합니다.

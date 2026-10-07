@@ -2,7 +2,7 @@
 # Windows 배포: build/ 의 Release 결과물을 MEON\ 에 모으고 Inno Setup 으로 설치 프로그램을 만든다.
 # 사용법 (release/ 에서, Git Bash): ./distwin.sh <version>
 # 결과: release/instoutput/MEON-<version>-Installer.exe
-# 코드 서명은 하지 않는다 (인증서 없음) — 처음 실행 시 SmartScreen 경고가 뜬다.
+# 코드 서명은 여기서 하지 않는다. CI (.github/workflows/windows.yml) 가 SignPath 로 설치 파일을 서명한다.
 
 set -e
 

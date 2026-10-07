@@ -2,6 +2,9 @@
 # - 실행 결과 페이지의 Artifacts 에서 받을 수 있고,
 # - main 빌드는 'windows-latest' 프리릴리스에도 올라가서 항상 같은 주소로 최신 설치 파일을 받을 수 있다:
 #   https://github.com/unzzonzz/meon/releases/download/windows-latest/MEON-Installer.exe
+# - 코드 서명: SignPath Foundation (https://signpath.org). 저장소 변수 SIGNPATH_ORGANIZATION_ID 와
+#   시크릿 SIGNPATH_API_TOKEN 이 설정돼 있으면 main 빌드의 설치 파일을 서명한다. 없으면 서명 없이 진행.
+#   아티팩트 구성은 .signpath/artifact-configuration.xml 참고.
 name: Windows build
 
 on:
@@ -18,6 +21,7 @@ jobs:
     runs-on: windows-2022
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -73,12 +77,44 @@ jobs:
           name: MEON-${{ steps.ver.outputs.version }}-windows-${{ github.run_number }}
           path: release/instoutput/*.exe
 
+      - name: 서명할 파일 준비
+        id: tosign
+        if: github.ref == 'refs/heads/main' && vars.SIGNPATH_ORGANIZATION_ID != ''
+        run: |
+          mkdir -p signing
+          cp release/instoutput/MEON-*-Installer.exe signing/MEON-Installer.exe
+
+      - uses: actions/upload-artifact@v4
+        id: unsigned
+        if: steps.tosign.outcome == 'success'
+        with:
+          name: unsigned-${{ github.run_number }}
+          path: signing/MEON-Installer.exe
+
+      - name: SignPath 서명
+        if: steps.tosign.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'meon' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'initial' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
       - name: windows-latest 프리릴리스 갱신
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp release/instoutput/MEON-*-Installer.exe MEON-Installer.exe
+          if [ -f signed/MEON-Installer.exe ]; then
+            cp signed/MEON-Installer.exe MEON-Installer.exe
+          else
+            cp release/instoutput/MEON-*-Installer.exe MEON-Installer.exe
+          fi
           NOTES="main $(git rev-parse --short HEAD) 빌드 (v${{ steps.ver.outputs.version }}, run ${{ github.run_number }})"
           gh release delete windows-latest --yes --cleanup-tag || true
           gh release create windows-latest MEON-Installer.exe --prerelease --target "$GITHUB_SHA" \
