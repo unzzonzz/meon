@@ -60,7 +60,7 @@ Part fromCode (juce::juce_wchar c)
 //==============================================================================
 namespace
 {
-    /** 24 그리드 기준 도형. stroke 는 선으로, fill 은 면(+같은 선)으로 그린다. */
+    /** 24 그리드 기준 도형. stroke 는 선으로, fill 은 면으로만 그린다. */
     struct Shape { juce::Path stroke, fill; };
 
     juce::Path svg (const char* d) { return juce::Drawable::parseSVGPath (juce::String (d)); }
@@ -151,8 +151,7 @@ void drawIcon (juce::Graphics& g, juce::Rectangle<float> area, float size, Part 
     {
         auto f = shape.fill;
         f.applyTransform (t);
-        g.fillPath (f);
-        g.strokePath (f, stroke);
+        g.fillPath (f);   // 면에는 선을 덧그리지 않는다: 검은 건반이 1.5px 두꺼워져 1x 화면에서 틈이 뭉개진다
     }
     auto s = shape.stroke;
     s.applyTransform (t);
