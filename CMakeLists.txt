@@ -276,6 +276,8 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/zitaRev.h
         Source/meon/MeonTheme.cpp
         Source/meon/MeonTheme.h
+        Source/meon/MeonEmoji.cpp
+        Source/meon/MeonEmoji.h
         Source/meon/MeonLookAndFeel.cpp
         Source/meon/MeonLookAndFeel.h
         Source/meon/MeonWidgets.cpp

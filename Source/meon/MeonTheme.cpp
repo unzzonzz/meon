@@ -1,4 +1,5 @@
 #include "MeonTheme.h"
+#include "MeonEmoji.h"
 
 namespace meon
 {
@@ -25,6 +26,13 @@ FontCache::FontCache()
     semiBold = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardSemiBold_otf, BinaryData::PretendardSemiBold_otfSize);
     bold     = juce::Typeface::createSystemTypefaceFor (BinaryData::PretendardBold_otf,     BinaryData::PretendardBold_otfSize);
 #endif
+    if constexpr (! emoji::nativeLayout)
+    {
+        inputRegular  = emoji::makeEmojiAwareTypeface (regular);
+        inputMedium   = emoji::makeEmojiAwareTypeface (medium);
+        inputSemiBold = emoji::makeEmojiAwareTypeface (semiBold);
+        inputBold     = emoji::makeEmojiAwareTypeface (bold);
+    }
     gFontCache = this;
 }
 
@@ -42,6 +50,14 @@ juce::Typeface::Ptr FontCache::get (int weight) const
     return regular;
 }
 
+juce::Typeface::Ptr FontCache::getForInput (int weight) const
+{
+    if (weight >= 700) return inputBold;
+    if (weight >= 600) return inputSemiBold;
+    if (weight >= 500) return inputMedium;
+    return inputRegular;
+}
+
 FontCache* FontCache::instance()
 {
     return gFontCache;
@@ -54,6 +70,15 @@ juce::Font Fonts::get (int weight, float px)
             return juce::Font (tf).withPointHeight (px);
 
     return juce::Font (px * 1.2f, weight >= 600 ? juce::Font::bold : juce::Font::plain);
+}
+
+juce::Font Fonts::forInput (int weight, float px)
+{
+    if (auto* cache = FontCache::instance())
+        if (auto tf = cache->getForInput (weight))
+            return juce::Font (tf).withPointHeight (px);
+
+    return get (weight, px);
 }
 
 void drawParagraph (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
@@ -82,6 +107,12 @@ float paragraphHeight (const juce::String& text, const juce::Font& font, float w
 void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
                              juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification)
 {
+    if constexpr (! emoji::nativeLayout)
+    {
+        emoji::drawLines (g, emoji::layout (text, font, area.getWidth()), font, colour, area, lineHeightPx, justification);
+        return;
+    }
+
     juce::AttributedString as;
     as.setJustification (justification);
     as.append (text, font, colour);
@@ -94,8 +125,22 @@ void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const 
     as.draw (g, area);   // macOS: CoreText 로 그려 컬러 이모지가 나온다. 그 외: TextLayout 으로 그린다.
 }
 
+float paragraphHeightWithEmoji (const juce::String& text, const juce::Font& font, float width, float lineHeightPx)
+{
+    if constexpr (! emoji::nativeLayout)
+        return emoji::height (emoji::layout (text, font, width), font, lineHeightPx);
+
+    return paragraphHeight (text, font, width, lineHeightPx);
+}
+
 float lineWidthWithEmoji (const juce::String& text, const juce::Font& font)
 {
+    if constexpr (! emoji::nativeLayout)
+    {
+        const auto lines = emoji::layout (text, font, 0.0f);
+        return lines.empty() ? 0.0f : lines.front().width;
+    }
+
     juce::AttributedString as;
     as.append (text, font, juce::Colours::black);
     as.setWordWrap (juce::AttributedString::none);
@@ -122,6 +167,12 @@ void drawLineWithEmoji (juce::Graphics& g, const juce::String& text, const juce:
                 hi = mid - 1;
         }
         shown = shown.substring (0, lo).trimEnd() + ellipsis;
+    }
+
+    if constexpr (! emoji::nativeLayout)
+    {
+        emoji::drawLines (g, emoji::layout (shown, font, 0.0f), font, colour, area, font.getHeight(), justification);
+        return;
     }
 
     juce::AttributedString as;

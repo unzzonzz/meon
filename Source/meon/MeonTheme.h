@@ -57,10 +57,12 @@ public:
     ~FontCache();
 
     juce::Typeface::Ptr get (int weight) const;
+    juce::Typeface::Ptr getForInput (int weight) const;
     static FontCache* instance();
 
 private:
     juce::Typeface::Ptr regular, medium, semiBold, bold;
+    juce::Typeface::Ptr inputRegular, inputMedium, inputSemiBold, inputBold;   // Windows: 이모지를 한 글자로 재는 입력창용
     juce::Array<juce::Typeface::Ptr> memoryFonts;   // Windows: 등록 유지용
 };
 
@@ -68,6 +70,9 @@ struct Fonts
 {
     /** weight: 400 / 500 / 600 / 700,  px: CSS font-size (em 높이) */
     static juce::Font get (int weight, float px);
+
+    /** 입력창용. Windows 에서는 이모지 묶음을 한 글자·일정한 폭으로 재서 커서 위치가 맞는다 (MeonEmoji.h). */
+    static juce::Font forInput (int weight, float px);
 };
 
 /** 여러 줄 문단을 CSS line-height 처럼 그린다 (lineHeightPx = 줄 간격 픽셀). */
@@ -78,12 +83,13 @@ void drawParagraph (juce::Graphics& g, const juce::String& text, const juce::Fon
 /** 문단이 차지할 높이를 계산한다. */
 float paragraphHeight (const juce::String& text, const juce::Font& font, float width, float lineHeightPx);
 
-/** drawParagraph 와 같지만 이모지 같은, Pretendard 에 없는 글자도 그린다.
-    macOS 는 CoreText 로 직접 그려 컬러 이모지가 나오고, 다른 OS 는 TextLayout(대체 글꼴 윤곽선)으로 그린다.
-    높이는 paragraphHeight 로 잰다 (둘 다 같은 대체 글꼴 배치를 쓴다). */
+/** drawParagraph 와 같지만 이모지 같은, Pretendard 에 없는 글자도 그리고 긴 단어·한글도 줄을 바꾼다.
+    macOS 는 CoreText 로, Windows 는 직접 배치해서 그린다 (MeonEmoji.h). 높이는 paragraphHeightWithEmoji 로 잰다. */
 void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
                              juce::Rectangle<float> area, float lineHeightPx,
                              juce::Justification justification = juce::Justification::topLeft);
+
+float paragraphHeightWithEmoji (const juce::String& text, const juce::Font& font, float width, float lineHeightPx);
 
 /** 한 줄 텍스트를 이모지까지 그린다. 넘치면 끝을 '…' 로 줄인다. */
 void drawLineWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,

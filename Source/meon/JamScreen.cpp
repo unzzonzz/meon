@@ -522,7 +522,7 @@ private:
                 return (int) std::ceil (Fonts::get (400, plugin ? 11.0f : 12.0f).getHeight());
             const float msgPx = plugin ? 13.0f : 15.0f;
             const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
-            const int textH = (int) std::ceil (paragraphHeight (m.text, Fonts::get (400, msgPx), (float) width, msgPx * 1.5f));
+            const int textH = (int) std::ceil (paragraphHeightWithEmoji (m.text, Fonts::get (400, msgPx), (float) width, msgPx * 1.5f));
             return nameH + (plugin ? 2 : 3) + textH;
         }
 
