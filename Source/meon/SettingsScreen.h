@@ -52,13 +52,19 @@ private:
         LevelBar meter;
         MeonTextEditor nickInput;
         PartSelector partSelector;
-        MeonButton saveButton, logButton;
+        MeonButton saveButton, logButton, updateButton;
         LinkLabel licenseLink, sourceLink;
         juce::Rectangle<int> levelTextArea;
         struct Row { juce::String label; juce::Rectangle<int> area; };
         std::vector<std::pair<juce::String, juce::Rectangle<int>>> sectionTitles, rowLabels, infoRows, texts, subTexts;
         std::vector<juce::Rectangle<int>> dividers;
-        juce::Rectangle<int> audioPanel;
+        juce::Rectangle<int> audioPanel, updateArea;
+        const bool showUpdate;
+        bool inRoom = false;
+        /** 업데이트 상태에 맞춰 버튼 이름·모양을 바꾼다. 버튼 폭이 바뀌면 다시 배치한다. */
+        void refreshUpdate();
+        juce::String updateTitle() const;
+        juce::String updateDetail() const;
         bool updating = false;
         juce::Array<int> bufferChoices;
         juce::StringArray driverChoices;

@@ -4,11 +4,111 @@ namespace meon
 {
 
 //==============================================================================
+HomeScreen::UpdateNotice::UpdateNotice (MeonEditor& e) : juce::Button ("update"), editor (e)
+{
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setWantsKeyboardFocus (false);
+    onClick = [this]
+    {
+        auto& u = editor.getUpdater();
+        switch (u.getState())
+        {
+            case MeonUpdater::State::Available: editor.startUpdate(); break;
+            case MeonUpdater::State::Ready:     editor.installUpdate(); break;
+            case MeonUpdater::State::Failed:    u.check(); break;
+            default: break;
+        }
+    };
+    refresh();
+}
+
+void HomeScreen::UpdateNotice::refresh()
+{
+    auto& u = editor.getUpdater();
+    message = {};
+    action = {};
+    switch (u.getState())
+    {
+        case MeonUpdater::State::Available:
+            message = TXT ("새 버전이 나왔어요");
+            action = TXT ("업데이트");
+            break;
+        case MeonUpdater::State::Downloading:
+        {
+            const float p = u.getProgress();
+            message = TXT ("새 버전을 받는 중이에요") + (p >= 0.0f ? " " + juce::String ((int) std::floor (p * 100.0f)) + "%" : juce::String());
+            break;
+        }
+        case MeonUpdater::State::Ready:
+            message = TXT ("설치할 준비가 됐어요");
+            action = TXT ("다시 켜서 설치");
+            break;
+        case MeonUpdater::State::Failed:
+            if (u.lastFailureWasDownload())
+            {
+                message = TXT ("새 버전을 받지 못했어요");
+                action = TXT ("다시 시도");
+            }
+            break;
+        default:
+            break;
+    }
+    setVisible (message.isNotEmpty());
+    setEnabled (action.isNotEmpty());
+    setMouseCursor (action.isNotEmpty() ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+    repaint();
+}
+
+int HomeScreen::UpdateNotice::getIdealWidth() const
+{
+    // 받는 중에는 퍼센트가 바뀌어도 폭이 흔들리지 않게 100% 기준으로 잰다
+    const auto shown = message.endsWithChar ('%') ? message.upToLastOccurrenceOf (" ", false, false) + " 100%" : message;
+    float w = 14.0f + 7.0f + 8.0f + Fonts::get (500, 13.0f).getStringWidthFloat (shown) + 14.0f;
+    if (action.isNotEmpty())
+        w += 12.0f + Fonts::get (600, 13.0f).getStringWidthFloat (action);
+    return (int) std::ceil (w);
+}
+
+void HomeScreen::UpdateNotice::paintButton (juce::Graphics& g, bool over, bool)
+{
+    // 경고 상자 색 (#FFF8D6 / #F0DE8A), 버튼 모서리 6
+    auto r = getLocalBounds().toFloat();
+    g.setColour (col::warnBg);
+    g.fillRoundedRectangle (r, (float) metric::radiusButton);
+    g.setColour (col::warnBorder);
+    g.drawRoundedRectangle (r.reduced (0.5f), (float) metric::radiusButton, 1.0f);
+
+    float x = 14.0f;
+    const float dot = 7.0f;
+    g.setColour (col::accent);
+    g.fillEllipse (x, r.getCentreY() - dot * 0.5f, dot, dot);
+    x += dot + 8.0f;
+
+    auto font = Fonts::get (500, 13.0f);
+    const float mw = font.getStringWidthFloat (message);
+    g.setFont (font);
+    g.setColour (col::ink);
+    g.drawText (message, juce::Rectangle<float> (x, 0.0f, mw + 2.0f, r.getHeight()), juce::Justification::centredLeft, false);
+    if (action.isEmpty())
+        return;
+    x += mw + 12.0f;
+
+    auto af = Fonts::get (600, 13.0f);
+    const float aw = af.getStringWidthFloat (action);
+    g.setFont (af);
+    g.setColour (over ? col::ink : col::accentText);
+    g.drawText (action, juce::Rectangle<float> (x, 0.0f, aw + 2.0f, r.getHeight()), juce::Justification::centredLeft, false);
+    if (over)
+        g.fillRect (x, r.getCentreY() + 8.0f, aw, 1.0f);
+}
+
+//==============================================================================
 HomeScreen::HomeScreen (MeonEditor& e)
     : editor (e), plugin (e.isPluginMode()),
       settingsButton (TXT ("설정")),
       createButton (TXT ("방 만들기"), MeonButton::Style::Primary),
-      joinButton (TXT ("코드로 입장"), MeonButton::Style::Secondary)
+      joinButton (TXT ("코드로 입장"), MeonButton::Style::Secondary),
+      updateNotice (e)
 {
     settingsButton.setFont (13.0f, 500);
     settingsButton.setColourOverride (col::white, col::inkBody, col::border, col::panel);
@@ -33,6 +133,12 @@ HomeScreen::HomeScreen (MeonEditor& e)
     addAndMakeVisible (settingsButton);
     addAndMakeVisible (createButton);
     addAndMakeVisible (joinButton);
+    if (! plugin && MeonUpdater::isSupported())
+    {
+        addChildComponent (updateNotice);
+        updateNotice.refresh();
+        editor.getUpdater().addChangeListener (this);
+    }
 
     editor.getSession().addListener (this);
     editor.getSession().setServerPingInterval (5000);
@@ -43,6 +149,15 @@ HomeScreen::HomeScreen (MeonEditor& e)
 HomeScreen::~HomeScreen()
 {
     editor.getSession().removeListener (this);
+    editor.getUpdater().removeChangeListener (this);
+}
+
+void HomeScreen::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    const bool wasVisible = updateNotice.isVisible();
+    updateNotice.refresh();
+    if (updateNotice.isVisible() != wasVisible || updateNotice.isVisible())
+        resized();
 }
 
 void HomeScreen::updateState()
@@ -58,6 +173,11 @@ void HomeScreen::resized()
     auto r = getLocalBounds();
     const int sbW = settingsButton.getIdealWidth (plugin ? 13 : 14);
     settingsButton.setBounds (r.getRight() - (plugin ? 18 : 24) - sbW, plugin ? 16 : 20, sbW, plugin ? 32 : 34);
+    if (updateNotice.isVisible())
+    {
+        const int nw = updateNotice.getIdealWidth();
+        updateNotice.setBounds (r.getCentreX() - nw / 2, settingsButton.getY(), nw, settingsButton.getHeight());
+    }
 
     const int footerH = (plugin ? 16 : 16) + (plugin ? 20 : 28);
     footer = r.removeFromBottom (footerH);

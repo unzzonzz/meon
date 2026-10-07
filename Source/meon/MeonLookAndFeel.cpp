@@ -123,6 +123,18 @@ void MeonLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& la
     label.setColour (juce::Label::textColourId, box.isEnabled() ? col::ink : col::disabled);
 }
 
+void MeonLookAndFeel::drawComboBoxTextWhenNothingSelected (juce::Graphics& g, juce::ComboBox& box, juce::Label& label)
+{
+    // JUCE 기본 구현은 라벨의 로컬 좌표로 그려서 positionComboBoxText 의 왼쪽 여백이 빠진다 → 라벨 위치 그대로 그린다
+    g.setColour (box.findColour (juce::ComboBox::textColourId).withMultipliedAlpha (0.5f));
+    const auto font = getComboBoxFont (box);
+    g.setFont (font);
+    const auto area = getLabelBorderSize (label).subtractedFrom (label.getBounds());
+    g.drawFittedText (box.getTextWhenNothingSelected(), area, label.getJustificationType(),
+                      juce::jmax (1, (int) ((float) area.getHeight() / font.getHeight())),
+                      label.getMinimumHorizontalScale());
+}
+
 juce::PopupMenu::Options MeonLookAndFeel::getOptionsForComboBoxPopupMenu (juce::ComboBox& box, juce::Label& label)
 {
     // 목록은 필드에 붙지 않고 popupGap 만큼 띄워서 연다 (위로 열릴 때도 같은 간격)

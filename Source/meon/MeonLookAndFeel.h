@@ -18,6 +18,7 @@ public:
                        int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox&) override;
     juce::Font getComboBoxFont (juce::ComboBox&) override;
     void positionComboBoxText (juce::ComboBox&, juce::Label&, juce::Drawable*) override;
+    void drawComboBoxTextWhenNothingSelected (juce::Graphics&, juce::ComboBox&, juce::Label&) override;
     juce::PopupMenu::Options getOptionsForComboBoxPopupMenu (juce::ComboBox&, juce::Label&) override;
 
     // 드롭다운 목록 (팝업 메뉴). 배경색을 투명으로 두어 창이 불투명 사각형으로 만들어지지 않게 하고,

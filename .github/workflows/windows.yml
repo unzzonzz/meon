@@ -39,7 +39,8 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: CMake 구성
-        run: cmake -G "Visual Studio 17 2022" -A x64 -B build
+        # MEON_BUILD_ID: 앱이 자동 업데이트에서 windows-latest 의 build.txt 와 비교하는 빌드 번호
+        run: cmake -G "Visual Studio 17 2022" -A x64 -B build -DMEON_BUILD_ID=${{ github.run_number }}
 
       - name: 빌드
         run: cmake --build build --config Release --parallel --target MEON_Standalone MEON_VST3
@@ -83,3 +84,6 @@ jobs:
           gh release delete windows-latest --yes --cleanup-tag || true
           gh release create windows-latest MEON-Installer.exe --prerelease --target "$GITHUB_SHA" \
             --title "MEON Windows (최신 main 빌드)" --notes "$NOTES"
+          # 앱의 업데이트 확인용 빌드 번호. 설치 파일이 다 올라간 뒤에 올려야 앱이 반쯤 올라간 파일을 받지 않는다.
+          echo "${{ github.run_number }}" > build.txt
+          gh release upload windows-latest build.txt

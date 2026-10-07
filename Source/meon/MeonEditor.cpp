@@ -74,8 +74,18 @@ MeonEditor::MeonEditor (SonobusAudioProcessor& p)
         setResizeLimits (minW, minH, pluginMode ? 4000 : 10000, pluginMode ? 4000 : 10000);
     }
 
+    updater = std::make_unique<MeonUpdater>();
+    updater->onDownloaded = [this] { installUpdate(); };
+
     go (initialScreen(), false);
     session->start();
+
+    // 켤 때 한 번 새 버전 확인 (첫 화면이 뜨고 서버 연결이 시작된 뒤)
+    if (MeonUpdater::isSupported())
+    {
+        juce::Component::SafePointer<MeonEditor> safe (this);
+        juce::Timer::callAfterDelay (3000, [safe] { if (safe != nullptr) safe->updater->check(); });
+    }
 }
 
 MeonEditor::~MeonEditor()
@@ -85,6 +95,7 @@ MeonEditor::~MeonEditor()
     settingsFadingOut = nullptr;
     screen = nullptr;
     fadingOut = nullptr;
+    updater = nullptr;
     session = nullptr;
     settings = nullptr;
     juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
@@ -212,6 +223,24 @@ bool MeonEditor::requestedQuit()
     return true;
 }
 
+void MeonEditor::startUpdate()
+{
+    if (! session->isInRoom())
+        updater->download();
+}
+
+void MeonEditor::installUpdate()
+{
+    // 합주 중에 받기가 끝났으면 설치를 미룬다 (설정의 업데이트 버튼으로 다시 시작)
+    if (session->isInRoom())
+        return;
+    if (! updater->launchInstaller())
+        return;
+    saveAll();
+    if (auto* app = juce::JUCEApplicationBase::getInstance())
+        app->systemRequestedQuit();
+}
+
 void MeonEditor::saveAll()
 {
     settings->save();
@@ -243,7 +272,7 @@ juce::String MeonEditor::getVersionText() const
     if (pluginMode)
         v += " (AU / VST3)";
     else
-        v += " (build " + juce::String (MEON_BUILD_NUMBER) + ")";
+        v += " (build " + juce::String (MeonUpdater::currentBuild() > 0 ? MeonUpdater::currentBuild() : MEON_BUILD_NUMBER) + ")";
     return v;
 }
 
