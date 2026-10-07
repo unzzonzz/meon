@@ -3612,8 +3612,32 @@ private:
         return used || (Component::getCurrentlyModalComponent() != nullptr);
     }
 
+    // MEON: WM_CHAR delivers UTF-16 code units, so a character outside the BMP (most emoji)
+    // arrives as two messages: a high surrogate followed by a low surrogate. Join them here,
+    // otherwise each half gets inserted as a separate (invalid) character.
+    juce_wchar pendingHighSurrogate = 0;
+
     bool doKeyChar (int key, const LPARAM flags)
     {
+        if (key >= 0xd800 && key <= 0xdbff)
+        {
+            pendingHighSurrogate = (juce_wchar) key;
+            return true;
+        }
+
+        if (key >= 0xdc00 && key <= 0xdfff)
+        {
+            const auto high = std::exchange (pendingHighSurrogate, (juce_wchar) 0);
+
+            if (high == 0)
+                return true;
+
+            updateKeyModifiers();
+            const auto combined = (juce_wchar) (0x10000 + ((high - 0xd800) << 10) + (key - 0xdc00));
+            return handleKeyPress ((int) combined, combined);
+        }
+
+        pendingHighSurrogate = 0;
         updateKeyModifiers();
 
         auto textChar = (juce_wchar) key;
