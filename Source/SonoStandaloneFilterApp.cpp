@@ -109,7 +109,7 @@ public:
 
     const String getApplicationName() override              { return JucePlugin_Name; }
     const String getApplicationVersion() override           { return JucePlugin_VersionString; }
-    bool moreThanOneInstanceAllowed() override              { return true; }
+    bool moreThanOneInstanceAllowed() override              { return false; }
 
 
     AooServerConnectionInfo cmdlineConnInfo;
