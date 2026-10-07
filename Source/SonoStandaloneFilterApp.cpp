@@ -65,6 +65,68 @@ extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
  #define Component juce::Component
 #endif
 
+#if JUCE_WINDOWS
+// 독립 앱은 한 번에 하나만. JUCE 의 moreThanOneInstanceAllowed() 는 Global\ 뮤텍스를 쓰는데,
+// 권한(관리자/일반)이 다르거나 Global 생성이 막히면 각자 Local 로 떨어져 둘 다 뜰 수 있다.
+// 그래서 로그인 세션 단위 뮤텍스로 한 번 더 막고, 이미 떠 있으면 그 창을 앞으로 꺼낸다.
+static HANDLE meonSingleInstanceMutex = nullptr;
+
+static BOOL CALLBACK meonFindExistingWindow (HWND hwnd, LPARAM lParam)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId (hwnd, &pid);
+
+    if (pid == GetCurrentProcessId() || ! IsWindowVisible (hwnd) || GetWindow (hwnd, GW_OWNER) != nullptr)
+        return TRUE;
+
+    wchar_t title[64] = {};
+    wchar_t cls[64] = {};
+    GetWindowTextW (hwnd, title, 64);
+    GetClassNameW (hwnd, cls, 64);
+
+    if (wcscmp (title, L"" JucePlugin_Name) == 0 && wcsncmp (cls, L"JUCE_", 5) == 0)
+    {
+        *reinterpret_cast<HWND*> (lParam) = hwnd;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+// 이미 실행 중인 MEON 이 있으면 그 창을 앞으로 가져오고 true.
+static bool meonActivateExistingInstance()
+{
+    meonSingleInstanceMutex = CreateMutexW (nullptr, FALSE, L"Local\\MEON-SingleInstance");
+    const auto err = GetLastError();
+
+    if (meonSingleInstanceMutex != nullptr && err != ERROR_ALREADY_EXISTS)
+        return false; // 첫 번째 실행: 핸들은 프로세스가 끝날 때까지 쥐고 있는다
+
+    // 관리자 권한으로 뜬 쪽이 만든 뮤텍스는 일반 권한에서 ACCESS_DENIED 로 보인다. 이것도 '이미 실행 중'.
+    if (meonSingleInstanceMutex == nullptr && err != ERROR_ACCESS_DENIED)
+        return false;
+
+    if (meonSingleInstanceMutex != nullptr)
+    {
+        CloseHandle (meonSingleInstanceMutex);
+        meonSingleInstanceMutex = nullptr;
+    }
+
+    HWND existing = nullptr;
+    EnumWindows (meonFindExistingWindow, reinterpret_cast<LPARAM> (&existing));
+
+    if (existing != nullptr)
+    {
+        if (IsIconic (existing))
+            ShowWindow (existing, SW_RESTORE);
+
+        SetForegroundWindow (existing);
+    }
+
+    return true;
+}
+#endif
+
 #if JUCE_ANDROID
 #include "android/SonoBusActivity.h"
 
@@ -448,6 +510,12 @@ public:
     //==============================================================================
     void initialise (const String&) override
     {
+#if JUCE_WINDOWS
+        if (meonActivateExistingInstance()) {
+            quit();
+            return;
+        }
+#endif
 
         handleCommandLine();
 
