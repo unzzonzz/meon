@@ -3,6 +3,11 @@
 #if JUCE_MAC
  #include <unistd.h>
  #include <dlfcn.h>
+ #include <fcntl.h>
+ #include <spawn.h>
+ #include <crt_externs.h>
+ #include <string>
+ #include <vector>
 #endif
 
 #ifndef MEON_BUILD_ID
@@ -93,26 +98,104 @@ namespace
         return p.start (args, 0) && p.waitForProcessToFinish (timeoutMs) && p.getExitCode() == 0;
     }
 
-    // 앱이 완전히 꺼질 때까지 기다렸다가 MEON.app 을 새 것으로 바꾸고 다시 켠다.
-    // 바꾸다 실패하면 원래 앱을 되돌려 놓고 그대로 켠다.
-    const char* const swapScript = R"(
-PID="$1"; NEW="$2"; APP="$3"
+    // 교체할 때 옛 앱을 잠시 옮겨 두는 곳 (숨김). 실행 중인 앱은 지우지 않고 다음에 켤 때 지운다.
+    juce::File oldAppBundle (const juce::File& app)
+    {
+        return app.getSiblingFile (".MEON-old.app");
+    }
+
+    juce::File updateLog()
+    {
+        return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Library/Logs/MEON/update.log");
+    }
+
+    void log (const juce::String& text)
+    {
+        auto f = updateLog();
+        f.getParentDirectory().createDirectory();
+        f.appendText (juce::Time::getCurrentTime().toString (true, true) + " " + text + "\n");
+    }
+
+    // 실행 중인 MEON.app 자리에 새 앱을 넣는다. 실행 중인 앱은 이미 메모리에 올라와 있어서 바꿔도 된다.
+    // 실패하면 원래 앱을 되돌려 놓는다.
+    bool replaceApp (const juce::File& newApp, const juce::File& app)
+    {
+        const auto old = oldAppBundle (app);
+        old.deleteRecursively();
+        if (! app.moveFileTo (old))
+        {
+            log ("move old app failed: " + app.getFullPathName());
+            return false;
+        }
+        // 같은 볼륨이면 이름만 바꾸고, 아니면 ditto 로 복사한다 (서명·심볼릭 링크 보존)
+        if (! newApp.moveFileTo (app)
+            && ! runTool ({ "/usr/bin/ditto", newApp.getFullPathName(), app.getFullPathName() }, 120000))
+        {
+            log ("put new app failed, restoring");
+            app.deleteRecursively();
+            old.moveFileTo (app);
+            return false;
+        }
+        runTool ({ "/usr/bin/xattr", "-dr", "com.apple.quarantine", app.getFullPathName() }, 30000);
+        log ("replaced " + app.getFullPathName());
+        return true;
+    }
+
+    // 앱이 꺼질 때까지 기다렸다가 다시 켠다. Finder 에서 켠 앱이 꺼질 때 macOS 가 같은 프로세스 그룹을
+    // 함께 정리하므로, 새 세션(setsid)으로 띄워서 앱과 떨어뜨린다.
+    const char* const relaunchScript = R"(
+PID="$1"; APP="$2"; LOG="$3"
 n=0
 while kill -0 "$PID" 2>/dev/null; do
-  n=$((n+1)); [ $n -gt 300 ] && exit 1
+  n=$((n+1)); [ $n -gt 300 ] && break
   sleep 0.2
 done
-OLD="$APP.old-$$"
-if mv "$APP" "$OLD"; then
-  if mv "$NEW" "$APP"; then rm -rf "$OLD"; else mv "$OLD" "$APP"; fi
-fi
-xattr -dr com.apple.quarantine "$APP"
-open "$APP"
+sleep 0.5
+echo "$(date) relaunch $APP" >> "$LOG"
+/usr/bin/open "$APP" >> "$LOG" 2>&1 || echo "$(date) open failed" >> "$LOG"
 )";
+
+    bool spawnDetached (const juce::StringArray& args)
+    {
+        posix_spawnattr_t attr;
+        posix_spawnattr_init (&attr);
+       #ifdef POSIX_SPAWN_SETSID
+        posix_spawnattr_setflags (&attr, POSIX_SPAWN_SETSID);
+       #else
+        posix_spawnattr_setflags (&attr, POSIX_SPAWN_SETPGROUP);
+        posix_spawnattr_setpgroup (&attr, 0);
+       #endif
+        posix_spawn_file_actions_t files;
+        posix_spawn_file_actions_init (&files);
+        posix_spawn_file_actions_addopen (&files, 0, "/dev/null", O_RDONLY, 0);
+        posix_spawn_file_actions_addopen (&files, 1, "/dev/null", O_WRONLY, 0);
+        posix_spawn_file_actions_addopen (&files, 2, "/dev/null", O_WRONLY, 0);
+
+        std::vector<std::string> strings;
+        for (auto& a : args)
+            strings.push_back (a.toStdString());
+        std::vector<char*> argv;
+        for (auto& str : strings)
+            argv.push_back (str.data());
+        argv.push_back (nullptr);
+
+        pid_t pid = 0;
+        const int result = posix_spawn (&pid, argv[0], &files, &attr, argv.data(), *_NSGetEnviron());
+        posix_spawn_file_actions_destroy (&files);
+        posix_spawnattr_destroy (&attr);
+        return result == 0;
+    }
    #endif
 }
 
-MeonUpdater::MeonUpdater() : juce::Thread ("MEON updater") {}
+MeonUpdater::MeonUpdater() : juce::Thread ("MEON updater")
+{
+   #if JUCE_MAC
+    // 지난 업데이트에서 남은 옛 앱 정리
+    if (isSupported())
+        oldAppBundle (currentAppBundle()).deleteRecursively();
+   #endif
+}
 
 MeonUpdater::~MeonUpdater()
 {
@@ -322,15 +405,20 @@ bool MeonUpdater::launchInstaller()
         file = installer;
     }
    #if JUCE_MAC
-    // 앱이 꺼진 뒤 셸 스크립트가 MEON.app 을 바꿔 넣고 다시 켠다 (ChildProcess 는 앱이 꺼져도 계속 돈다)
-    auto script = downloadFolder().getChildFile ("swap.sh");
-    if (script.replaceWithText (swapScript)
-        && juce::ChildProcess().start ({ "/bin/sh", script.getFullPathName(),
-                                         juce::String ((int) getpid()), file.getFullPathName(),
-                                         currentAppBundle().getFullPathName() }, 0))
-        return true;
-    setState (State::Ready);
-    return false;
+    // 앱을 먼저 바꿔 넣고, 꺼진 뒤 다시 켜는 것만 떨어진 프로세스에 맡긴다.
+    // 다시 켜기가 실패해도 사용자가 직접 켜면 새 버전이 뜬다.
+    const auto app = currentAppBundle();
+    if (! replaceApp (file, app))
+    {
+        setState (State::Failed);
+        return false;
+    }
+    auto script = downloadFolder().getChildFile ("relaunch.sh");
+    if (! script.replaceWithText (relaunchScript)
+        || ! spawnDetached ({ "/bin/sh", script.getFullPathName(), juce::String ((int) getpid()),
+                              app.getFullPathName(), updateLog().getFullPathName() }))
+        log ("relaunch spawn failed");
+    return true;   // 이미 바꿔 넣었으니 종료한다
    #else
     // /SILENT: 묻는 것 없이 진행 막대만 보여 준다. /UPDATE=1: 설치가 끝나면 앱을 다시 켠다 (wininstaller.iss).
     // ShellExecute 라서 관리자 권한 확인 창을 거친다. 거기서 취소하면 false.
