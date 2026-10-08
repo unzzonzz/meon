@@ -2,7 +2,8 @@
 // CI 가 main 빌드마다 windows-latest / mac-latest 프리릴리스에 새 빌드와 build.txt(빌드 번호)를 올린다.
 // 앱은 build.txt 를 내 빌드 번호(MEON_BUILD_ID)와 비교하고, 새 빌드면 받아서 설치한다.
 // - Windows: 설치 프로그램을 조용한 설치(/SILENT)로 실행한 뒤 종료. 설치가 끝나면 설치 프로그램이 앱을 다시 켠다.
-// - macOS: MEON-mac.zip 을 받아 풀어 두고, 앱이 꺼지면 셸 스크립트가 MEON.app 을 바꿔 넣고 다시 켠다.
+// - macOS: MEON-mac.zip 을 받아 풀어 두고, 설치 때 MEON.app 을 바꿔 넣은 뒤 종료. 떨어진 프로세스(setsid)가 앱을 다시 켠다.
+//   기록: ~/Library/Logs/MEON/update.log
 #pragma once
 
 #include "MeonTheme.h"
@@ -36,7 +37,7 @@ public:
     void check();
     /** Available 일 때 새 빌드 받기 시작. 끝나면 onDownloaded 를 메시지 스레드에서 부른다. */
     void download();
-    /** Ready 일 때 설치를 시작한다 (Windows: 설치 프로그램 실행, macOS: 앱 교체 스크립트 실행). 성공하면 true (호출한 쪽이 앱을 종료한다). */
+    /** Ready 일 때 설치를 시작한다 (Windows: 설치 프로그램 실행, macOS: 앱 교체 후 다시 켜기 예약). 성공하면 true (호출한 쪽이 앱을 종료한다). */
     bool launchInstaller();
 
     State getState() const;
