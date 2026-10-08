@@ -106,10 +106,11 @@ namespace
 
             case Part::Keys:
                 roundRect (st, 2.5f, 5.0f, 19.0f, 14.0f, 2.0f);
-                st.addPath (svg ("M7.25 12.5V19M12 12.5V19M16.75 12.5V19"));
-                roundRect (s.fill, 6.0f, 5.0f, 2.5f, 7.5f, 0.6f);
-                roundRect (s.fill, 10.75f, 5.0f, 2.5f, 7.5f, 0.6f);
-                roundRect (s.fill, 15.5f, 5.0f, 2.5f, 7.5f, 0.6f);
+                st.addPath (svg ("M7.25 13V19M12 13V19M16.75 13V19"));
+                // 검은 건반은 채우기만 (테두리 없음). 건반 사이 틈 2.25 단위 = 1x 22px 에서 약 2.06px
+                roundRect (s.fill, 6.0f, 5.0f, 2.5f, 8.0f, 0.6f);
+                roundRect (s.fill, 10.75f, 5.0f, 2.5f, 8.0f, 0.6f);
+                roundRect (s.fill, 15.5f, 5.0f, 2.5f, 8.0f, 0.6f);
                 break;
 
             case Part::Other:

@@ -172,8 +172,8 @@ void MeonLookAndFeel::drawPopupMenuItemWithOptions (juce::Graphics& g, const juc
         g.fillRoundedRectangle (area.reduced (metric::popupPad, 0).toFloat(), (float) metric::popupItemRadius);
     }
 
-    // 글자 x 위치는 필드의 글자와 같게 (창 가장자리에서 필드 안쪽 여백만큼). 현재 값은 포인트색 + 세미볼드
-    g.setColour (! item.isEnabled ? col::disabled : (item.isTicked ? col::accentText : col::ink));
+    // 글자 x 위치는 필드의 글자와 같게 (창 가장자리에서 필드 안쪽 여백만큼). 현재 값은 보조 회색(inkSub) + 세미볼드
+    g.setColour (! item.isEnabled ? col::disabled : (item.isTicked ? col::inkSub : col::ink));
     g.setFont (Fonts::get (item.isTicked ? 600 : 400, m.fontPx));
     g.drawText (item.text, area.reduced (m.pad, 0), juce::Justification::centredLeft, true);
 }

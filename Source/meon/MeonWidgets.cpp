@@ -410,7 +410,7 @@ void WarningBox::paint (juce::Graphics& g)
     for (auto& line : lines)
     {
         float h = paragraphHeight (line, bodyFont, textW, lineH);
-        drawParagraph (g, line, bodyFont, col::inkBody, juce::Rectangle<float> (x, y, textW, h + 2.0f), lineH);
+        drawParagraph (g, line, bodyFont, col::inkSub, juce::Rectangle<float> (x, y, textW, h + 2.0f), lineH);
         y += h;
     }
 }

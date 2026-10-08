@@ -100,7 +100,7 @@ void HomeScreen::UpdateNotice::paintButton (juce::Graphics& g, bool over, bool)
     auto af = Fonts::get (600, 13.0f);
     const float aw = af.getStringWidthFloat (action);
     g.setFont (af);
-    g.setColour (over ? col::ink : col::accentText);
+    g.setColour (over ? col::ink : col::inkSub);
     g.drawText (action, juce::Rectangle<float> (x, 0.0f, aw + 2.0f, r.getHeight()), juce::Justification::centredLeft, false);
     if (over)
         g.fillRect (x, r.getCentreY() + 8.0f, aw, 1.0f);
@@ -115,7 +115,7 @@ HomeScreen::HomeScreen (MeonEditor& e)
       updateNotice (e)
 {
     settingsButton.setFont (13.0f, 500);
-    settingsButton.setColourOverride (col::white, col::inkBody, col::border, col::panel);
+    settingsButton.setColourOverride (col::white, col::inkSub, col::border, col::panel);
     settingsButton.onClick = [this] { editor.openSettings(); };
 
     createButton.setFont (plugin ? 19.0f : 22.0f, 700);
@@ -252,7 +252,7 @@ CreateRoomScreen::CreateRoomScreen (MeonEditor& e)
       enterButton (TXT ("입장하기"), MeonButton::Style::Primary)
 {
     homeButton.setFont (13.0f, 500);
-    homeButton.setColourOverride (col::white, col::inkBody, col::border, col::panel);
+    homeButton.setColourOverride (col::white, col::inkSub, col::border, col::panel);
     homeButton.onClick = [this]
     {
         editor.getSession().leaveRoom();   // 입장 전에 나가면 방은 사라진다
@@ -377,7 +377,7 @@ void CreateRoomScreen::paint (juce::Graphics& g)
     if (note.isNotEmpty())
     {
         g.setFont (Fonts::get (400, 13.0f));
-        g.setColour (failed ? col::accentText : col::disabled);
+        g.setColour (failed ? col::inkSub : col::disabled);
         g.drawText (note, juce::Rectangle<int> (0, enterButton.getBottom() + 16, getWidth(), 16), juce::Justification::centred, false);
     }
 }
@@ -390,7 +390,7 @@ JoinRoomScreen::JoinRoomScreen (MeonEditor& e)
       code (e.isPluginMode() ? 56 : 68, e.isPluginMode() ? 68 : 84, e.isPluginMode() ? 10 : 12, e.isPluginMode() ? 30.0f : 36.0f)
 {
     homeButton.setFont (13.0f, 500);
-    homeButton.setColourOverride (col::white, col::inkBody, col::border, col::panel);
+    homeButton.setColourOverride (col::white, col::inkSub, col::border, col::panel);
     homeButton.onClick = [this] { editor.go (MeonEditor::Screen::Home); };
 
     enterButton.setFont (plugin ? 16.0f : 17.0f, 600);

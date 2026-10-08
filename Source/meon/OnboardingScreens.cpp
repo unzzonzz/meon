@@ -356,7 +356,7 @@ void AudioDeviceScreen::updateBufferButtons()
         }
         else
         {
-            b->setColourOverride (col::white, col::inkBody, col::border, col::panel);
+            b->setColourOverride (col::white, col::inkSub, col::border, col::panel);
             b->setFont (16.0f, 500);
             b->setSubtitleInk (col::disabled);
         }
@@ -601,7 +601,7 @@ void InputLevelScreen::updateLabels()
     if (noSignal)
     {
         meterValue.setText (TXT ("신호 없음"));
-        meterValue.setInk (col::accentText);
+        meterValue.setInk (col::inkSub);
     }
     else
     {
