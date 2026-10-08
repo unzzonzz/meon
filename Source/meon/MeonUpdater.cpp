@@ -141,10 +141,11 @@ namespace
         return true;
     }
 
-    // 앱이 꺼질 때까지 기다렸다가 다시 켠다. Finder 에서 켠 앱이 꺼질 때 macOS 가 같은 프로세스 그룹을
-    // 함께 정리하므로, 새 세션(setsid)으로 띄워서 앱과 떨어뜨린다.
+    // 앱이 꺼질 때까지 기다렸다가 다시 켠다. 앱이 띄운 프로세스는 새 세션(setsid)이어도 앱이 꺼질 때
+    // macOS 가 함께 정리한다 (build 9 에서 확인). 그래서 launchd 사용자 작업으로 맡겨 앱과 완전히 떼어 놓는다.
+    const char* const relaunchLabel = "com.meon.MEON.relaunch";
     const char* const relaunchScript = R"(
-PID="$1"; APP="$2"; LOG="$3"
+PID="$1"; APP="$2"; LOG="$3"; LABEL="$4"
 n=0
 while kill -0 "$PID" 2>/dev/null; do
   n=$((n+1)); [ $n -gt 300 ] && break
@@ -153,7 +154,36 @@ done
 sleep 0.5
 echo "$(date) relaunch $APP" >> "$LOG"
 /usr/bin/open "$APP" >> "$LOG" 2>&1 || echo "$(date) open failed" >> "$LOG"
+[ -n "$LABEL" ] && /bin/launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
+exit 0
 )";
+
+    juce::String xmlEscape (const juce::String& t)
+    {
+        return t.replace ("&", "&amp;").replace ("<", "&lt;").replace (">", "&gt;");
+    }
+
+    // launchd 에 한 번만 도는 사용자 작업으로 등록한다 (gui/<uid> 도메인이라 open 으로 앱을 켤 수 있다)
+    bool submitToLaunchd (const juce::StringArray& args, const juce::File& plist)
+    {
+        const auto domain = "gui/" + juce::String ((int) getuid());
+        runTool ({ "/bin/launchctl", "bootout", domain + "/" + relaunchLabel }, 10000);   // 지난번에 남은 작업 (없으면 실패해도 됨)
+
+        juce::String argsXml;
+        for (auto& a : args)
+            argsXml << "    <string>" << xmlEscape (a) << "</string>\n";
+        const auto text = juce::String ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+                                        "<plist version=\"1.0\"><dict>\n"
+                                        "  <key>Label</key><string>") + relaunchLabel + "</string>\n"
+                          "  <key>ProgramArguments</key><array>\n" + argsXml + "  </array>\n"
+                          "  <key>RunAtLoad</key><true/>\n"
+                          "  <key>AbandonProcessGroup</key><true/>\n"
+                          "</dict></plist>\n";
+        if (! plist.replaceWithText (text))
+            return false;
+        return runTool ({ "/bin/launchctl", "bootstrap", domain, plist.getFullPathName() }, 10000);
+    }
 
     bool spawnDetached (const juce::StringArray& args)
     {
@@ -414,9 +444,15 @@ bool MeonUpdater::launchInstaller()
         return false;
     }
     auto script = downloadFolder().getChildFile ("relaunch.sh");
-    if (! script.replaceWithText (relaunchScript)
-        || ! spawnDetached ({ "/bin/sh", script.getFullPathName(), juce::String ((int) getpid()),
-                              app.getFullPathName(), updateLog().getFullPathName() }))
+    const juce::StringArray args { "/bin/sh", script.getFullPathName(), juce::String ((int) getpid()),
+                                   app.getFullPathName(), updateLog().getFullPathName(), relaunchLabel };
+    if (! script.replaceWithText (relaunchScript))
+        log ("relaunch script write failed");
+    else if (submitToLaunchd (args, downloadFolder().getChildFile ("relaunch.plist")))
+        log ("relaunch scheduled (launchd)");
+    else if (spawnDetached (args))
+        log ("relaunch scheduled (spawn, launchd failed)");
+    else
         log ("relaunch spawn failed");
     return true;   // 이미 바꿔 넣었으니 종료한다
    #else
