@@ -12,15 +12,16 @@ namespace meon
 
 namespace col
 {
+    // 노랑(accent, accentDown, warnBg, warnBorder)은 배경·채우기에만 쓴다. 글자에는 쓰지 않는다.
+    // 글자 회색은 세 단계뿐: ink #1A1A1A(제목·주요) / inkSub #767676(본문·보조·링크) / disabled #AAAAAA(비활성)
+    // (#8F7200 포인트 글자, #4A4A4A 본문 글자는 폐기 → inkSub)
     const juce::Colour accent      { 0xFFFFD700u };  // 포인트 (유일한 컬러, 노랑 시안)
     const juce::Colour accentDown  { 0xFFEBC600u };  // 포인트 눌림
-    const juce::Colour accentText  { 0xFF8F7200u };  // 흰 바탕 위 포인트 색 글자 (노랑 대비 보정)
     const juce::Colour onAccent    { 0xFF1A1A1Au };  // 노랑 면 위 글자·아이콘
     const juce::Colour warnBg      { 0xFFFFF8D6u };  // 경고 배경
     const juce::Colour warnBorder  { 0xFFF0DE8Au };  // 경고 테두리
-    const juce::Colour ink         { 0xFF1A1A1Au };  // 본문 텍스트
-    const juce::Colour inkSub      { 0xFF767676u };  // 보조 텍스트
-    const juce::Colour inkBody     { 0xFF4A4A4Au };  // 본문(설명) 텍스트
+    const juce::Colour ink         { 0xFF1A1A1Au };  // 제목·주요 텍스트
+    const juce::Colour inkSub      { 0xFF767676u };  // 본문·보조 텍스트, 링크 (흰 바탕 대비 4.5:1)
     const juce::Colour disabled    { 0xFFAAAAAAu };  // 비활성
     const juce::Colour panel       { 0xFFF5F5F5u };  // 패널 / 비활성 카드
     const juce::Colour border      { 0xFFD5D5D5u };  // 테두리 · 입력 필드

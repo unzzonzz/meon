@@ -284,11 +284,11 @@ public:
                             juce::Justification::centredLeft, false);
         }
 
-        // 핑 (오른쪽). 18 ms 초과는 숫자 색 + 카드 테두리 + 하단 문구로만 표시
+        // 핑 (오른쪽). 18 ms 초과는 카드 테두리(노랑) + 하단 문구로만 표시 (글자에는 노랑 계열을 쓰지 않는다)
         juce::String pingText = (off || ! member.hasStats) ? TXT ("— ms") : juce::String ((int) std::lround (member.pingMs)) + " ms";
         auto pingFont = Fonts::get (600, plugin ? 13.0f : 15.0f);
         g.setFont (pingFont);
-        g.setColour (off ? col::disabled : (warn ? col::accentText : col::inkBody));
+        g.setColour (off ? col::disabled : col::inkSub);
         const int pingW = (int) std::ceil (pingFont.getStringWidthFloat (pingText));
         g.drawText (pingText, juce::Rectangle<int> (inner.getRight() - pingW, inner.getY(), pingW, headerH), juce::Justification::centredRight, false);
 
@@ -305,16 +305,15 @@ public:
 
         // 상태 문구
         juce::String status;
-        juce::Colour statusInk = col::inkSub;
-        if (off && member.joinFailed)   { status = TXT ("연결 실패 · 네트워크 확인 필요"); statusInk = col::inkSub; }
+        if (off && member.joinFailed)   { status = TXT ("연결 실패 · 네트워크 확인 필요"); }
         else if (off)                   { status = TXT ("연결 끊김 · 재연결 중"); }
         else if (member.pending)        { status = TXT ("연결 중…"); }
-        else if (warn)                  { status = TXT ("지연이 조금 있어요"); statusInk = col::accentText; }
+        else if (warn)                  { status = TXT ("지연이 조금 있어요"); }
         else if (member.muted)          { status = TXT ("소리 꺼짐"); }
         if (status.isNotEmpty())
         {
             g.setFont (Fonts::get (500, plugin ? 12.0f : 13.0f));
-            g.setColour (statusInk);
+            g.setColour (col::inkSub);
             g.drawText (status, statusArea, juce::Justification::centredLeft, true);
         }
     }
@@ -544,7 +543,7 @@ private:
                 {
                     const bool mine = m.kind == MeonSession::ChatMessage::Mine;
                     const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
-                    drawLineWithEmoji (g, mine ? TXT ("나") : m.from, Fonts::get (600, plugin ? 12.0f : 13.0f), mine ? col::accentText : col::inkSub,
+                    drawLineWithEmoji (g, mine ? TXT ("나") : m.from, Fonts::get (600, plugin ? 12.0f : 13.0f), col::inkSub,
                                        juce::Rectangle<int> (pad, y, width, nameH).toFloat(), mine ? juce::Justification::centredRight : juce::Justification::centredLeft);
                     const float msgPx = plugin ? 13.0f : 15.0f;
                     drawParagraphWithEmoji (g, m.text, Fonts::get (400, msgPx), col::ink,
@@ -708,7 +707,7 @@ public:
         const int titleH = (int) std::ceil (Fonts::get (700, titlePx).getHeight());
         g.setFont (Fonts::get (700, titlePx));
         g.drawText (quit ? TXT ("방을 나가고 종료할까요") : TXT ("방을 나갈까요"), juce::Rectangle<int> (card.getX() + padX, card.getY() + padY, card.getWidth() - padX * 2, titleH), juce::Justification::centredLeft, false);
-        drawParagraph (g, bodyText(), Fonts::get (400, bodyPx), col::inkBody,
+        drawParagraph (g, bodyText(), Fonts::get (400, bodyPx), col::inkSub,
                        juce::Rectangle<float> ((float) (card.getX() + padX), (float) (card.getY() + padY + titleH + (plugin ? 10 : 12)), (float) (card.getWidth() - padX * 2), 80.0f),
                        bodyPx * 1.6f);
     }
@@ -736,7 +735,7 @@ JamScreen::JamScreen (MeonEditor& e)
     if (plugin) copyButton.setCornerRadius (5.0f);
     copyButton.onClick = [this] { copyCode(); };
     settingsButton.setFont (plugin ? 12.0f : 13.0f, 500);
-    settingsButton.setColourOverride (col::white, col::inkBody, col::border, col::panel);
+    settingsButton.setColourOverride (col::white, col::inkSub, col::border, col::panel);
     settingsButton.onClick = [this] { editor.openSettings(); };
     leaveButton.setFont (plugin ? 12.0f : 13.0f, 500);
     leaveButton.setBadge ("Esc");

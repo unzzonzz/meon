@@ -21,7 +21,7 @@ void SettingsScreen::LinkLabel::paintButton (juce::Graphics& g, bool over, bool)
 {
     auto font = Fonts::get (400, px);
     g.setFont (font);
-    g.setColour (over ? col::ink : col::accentText);
+    g.setColour (over ? col::ink : col::inkSub);
     g.drawText (text, getLocalBounds(), juce::Justification::centredLeft, false);
     if (over)
         g.fillRect (0, getHeight() - 2, getIdealWidth() - 2, 1);
@@ -473,7 +473,7 @@ void SettingsScreen::Content::paint (juce::Graphics& g)
         g.setColour (col::cardBorder);
         g.drawRoundedRectangle (audioPanel.toFloat().reduced (0.5f), (float) metric::radiusCard, 1.0f);
         auto inner = audioPanel.reduced (16, 14);
-        g.setColour (col::inkBody);
+        g.setColour (col::inkSub);
         g.setFont (Fonts::get (400, 14.0f));
         g.drawText (TXT ("장치와 버퍼는 DAW 설정을 따릅니다"), inner.removeFromTop (18), juce::Justification::centredLeft, false);
         inner.removeFromTop (6);
@@ -496,7 +496,7 @@ void SettingsScreen::Content::paint (juce::Graphics& g)
     {
         g.setColour (col::inkSub);
         g.drawText (r.first, r.second.withWidth (labelW), juce::Justification::centredLeft, false);
-        g.setColour (col::inkBody);
+        g.setColour (col::inkSub);
         juce::String value;
         if (i == 0)      value = owner.editor.getVersionText();
         else if (i == 1) value = TXT ("SonoBus 기반 수정판");
