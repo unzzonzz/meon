@@ -2,6 +2,7 @@
 # - 실행 결과 페이지의 Artifacts 에서 받을 수 있고,
 # - main 빌드는 'mac-latest' 프리릴리스에도 올라가서 항상 같은 주소로 최신 파일을 받을 수 있다:
 #   https://github.com/unzzonzz/meon/releases/download/mac-latest/MEON.dmg
+# - 같은 릴리스에 앱 자동 업데이트용 MEON-mac.zip 과 build.txt(빌드 번호)도 올린다 (Source/meon/MeonUpdater.h).
 # - 유니버설(Intel + Apple Silicon) 빌드. Apple 개발자 서명·공증은 하지 않고 ad-hoc 서명만 한다.
 #   처음 열 때 경고를 넘기는 방법은 doc/INSTALL.md 참고.
 name: macOS build
@@ -30,6 +31,7 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: CMake 구성
+        # MEON_BUILD_ID: 앱이 자동 업데이트에서 mac-latest 의 build.txt 와 비교하는 빌드 번호
         run: cmake -DCMAKE_BUILD_TYPE=Release -B build -DMEON_BUILD_ID=${{ github.run_number }}
 
       - name: 빌드
@@ -57,6 +59,8 @@ jobs:
           mkdir -p dist
           hdiutil create -volname "MEON ${{ steps.ver.outputs.version }}" -srcfolder "$STAGE" \
             -fs HFS+ -format UDZO -ov "dist/MEON-${{ steps.ver.outputs.version }}-mac.dmg"
+          # 자동 업데이트용: 앱만 담은 zip (ditto 는 서명과 심볼릭 링크를 그대로 보존한다)
+          ditto -c -k --keepParent "$A/Standalone/MEON.app" dist/MEON-mac.zip
           ls -la dist
 
       - uses: actions/upload-artifact@v4
@@ -70,7 +74,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp dist/MEON-*-mac.dmg MEON.dmg
+          cp dist/MEON-mac.zip MEON-mac.zip
           NOTES="main $(git rev-parse --short HEAD) 빌드 (v${{ steps.ver.outputs.version }}, run ${{ github.run_number }})"
           gh release delete mac-latest --yes --cleanup-tag || true
-          gh release create mac-latest MEON.dmg --prerelease --target "$GITHUB_SHA" \
+          gh release create mac-latest MEON.dmg MEON-mac.zip --prerelease --target "$GITHUB_SHA" \
             --title "MEON macOS (최신 main 빌드)" --notes "$NOTES"
+          # 앱의 업데이트 확인용 빌드 번호. zip 이 다 올라간 뒤에 올려야 앱이 반쯤 올라간 파일을 받지 않는다.
+          echo "${{ github.run_number }}" > build.txt
+          gh release upload mac-latest build.txt
