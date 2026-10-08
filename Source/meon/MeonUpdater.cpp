@@ -2,6 +2,7 @@
 
 #if JUCE_MAC
  #include <unistd.h>
+ #include <dlfcn.h>
 #endif
 
 #ifndef MEON_BUILD_ID
@@ -36,10 +37,54 @@ namespace
     }
 
    #if JUCE_MAC
-    // 지금 실행 중인 MEON.app. 이 자리를 새 앱으로 바꿔 넣는다.
+    // 브라우저로 받은 dmg 에서 끌어다 놓은 앱은 격리 속성 때문에 macOS 가 읽기 전용 임시 위치
+    // (…/AppTranslocation/…)로 옮겨서 실행한다 (App Translocation). 그때는 원래 자리(/Applications/MEON.app 등)를 찾는다.
+    // CoreFoundation/Security 헤더는 JUCE 이름과 부딪혀서 함수만 dlsym 으로 가져온다.
+    juce::File originalPathIfTranslocated (const juce::File& app)
+    {
+        if (! app.getFullPathName().contains ("/AppTranslocation/"))
+            return app;
+
+        using CFURLCreateFn  = void* (*) (void*, const unsigned char*, long, unsigned char);
+        using CFURLGetPathFn = unsigned char (*) (void*, unsigned char, unsigned char*, long);
+        using CFReleaseFn    = void (*) (void*);
+        using OriginalFn     = void* (*) (void*, void**);
+
+        static void* const security = dlopen ("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY);
+        auto create   = (CFURLCreateFn)  dlsym (RTLD_DEFAULT, "CFURLCreateFromFileSystemRepresentation");
+        auto getPath  = (CFURLGetPathFn) dlsym (RTLD_DEFAULT, "CFURLGetFileSystemRepresentation");
+        auto release  = (CFReleaseFn)    dlsym (RTLD_DEFAULT, "CFRelease");
+        auto original = security != nullptr ? (OriginalFn) dlsym (security, "SecTranslocateCreateOriginalPathForURL") : nullptr;
+        if (create == nullptr || getPath == nullptr || release == nullptr || original == nullptr)
+            return {};
+
+        const auto path = app.getFullPathName().toStdString();
+        juce::File result;
+        if (auto* url = create (nullptr, (const unsigned char*) path.data(), (long) path.size(), 1))
+        {
+            if (auto* orig = original (url, nullptr))
+            {
+                char buffer[4096] = {};
+                if (getPath (orig, 1, (unsigned char*) buffer, (long) sizeof (buffer)))
+                    result = juce::File (juce::CharPointer_UTF8 (buffer));
+                release (orig);
+            }
+            release (url);
+        }
+        return result;
+    }
+
+    // 바꿔 넣을 MEON.app (실행 중인 앱의 원래 자리)
     juce::File currentAppBundle()
     {
-        return juce::File::getSpecialLocation (juce::File::currentApplicationFile);
+        return originalPathIfTranslocated (juce::File::getSpecialLocation (juce::File::currentApplicationFile));
+    }
+
+    bool canReplaceApp()
+    {
+        const auto app = currentAppBundle();
+        return app.getFileExtension() == ".app" && app.isDirectory()
+               && app.hasWriteAccess() && app.getParentDirectory().hasWriteAccess();
     }
 
     bool runTool (const juce::StringArray& args, int timeoutMs)
@@ -80,11 +125,8 @@ bool MeonUpdater::isSupported()
    #if JUCE_WINDOWS
     return MEON_BUILD_ID > 0 && juce::JUCEApplicationBase::isStandaloneApp();
    #elif JUCE_MAC
-    if (MEON_BUILD_ID <= 0 || ! juce::JUCEApplicationBase::isStandaloneApp())
-        return false;
-    // dmg 안에서 바로 켰거나 쓰기 권한이 없는 곳(다른 사용자 소유 등)이면 앱을 바꿔 넣을 수 없다
-    const auto app = currentAppBundle();
-    return app.getFileExtension() == ".app" && app.hasWriteAccess() && app.getParentDirectory().hasWriteAccess();
+    // 앱을 바꿔 넣을 수 없는 곳(dmg 안 등)이어도 확인은 하고, 받을 때 안내한다 (runDownload)
+    return MEON_BUILD_ID > 0 && juce::JUCEApplicationBase::isStandaloneApp();
    #else
     return false;
    #endif
@@ -143,6 +185,7 @@ void MeonUpdater::run()
         j = job;
     }
     failedOnDownload = (j == Job::Download);
+    failedOnPermission = false;
     if (j == Job::Check)
     {
         if (! runCheck())
@@ -178,6 +221,14 @@ bool MeonUpdater::runCheck()
 
 bool MeonUpdater::runDownload()
 {
+   #if JUCE_MAC
+    // dmg 안에서 바로 켰거나 쓰기 권한이 없는 곳이면 앱을 바꿔 넣을 수 없다
+    if (! canReplaceApp())
+    {
+        failedOnPermission = true;
+        return false;
+    }
+   #endif
     auto folder = downloadFolder();
     folder.deleteRecursively();   // 지난번에 받은 설치 프로그램 정리
     if (! folder.createDirectory())
