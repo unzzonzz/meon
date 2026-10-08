@@ -29,7 +29,7 @@ public:
     MeonUpdater();
     ~MeonUpdater() override;
 
-    /** Windows / macOS 독립 앱이고 CI 빌드(빌드 번호 있음)일 때만 true. macOS 는 앱 자리에 쓰기 권한도 있어야 한다. 아니면 화면에 업데이트 항목을 두지 않는다. */
+    /** Windows / macOS 독립 앱이고 CI 빌드(빌드 번호 있음)일 때만 true. 아니면 화면에 업데이트 항목을 두지 않는다. */
     static bool isSupported();
     static int currentBuild();
 
@@ -43,6 +43,8 @@ public:
     int getLatestBuild() const      { return latestBuild.load(); }
     float getProgress() const       { return progress.load(); }   // 0~1, 길이를 모르면 음수
     bool lastFailureWasDownload() const { return failedOnDownload.load(); }
+    /** macOS: 앱 자리에 쓸 수 없어서(dmg 안에서 실행 등) 받지 못했다. 다시 시도해도 소용없다. */
+    bool lastFailureWasPermission() const { return failedOnPermission.load(); }
 
     std::function<void()> onDownloaded;
 
@@ -54,6 +56,7 @@ private:
     std::atomic<int> latestBuild { 0 };
     std::atomic<float> progress { 0.0f };
     std::atomic<bool> failedOnDownload { false };
+    std::atomic<bool> failedOnPermission { false };
     juce::File installer;
 
     void setState (State s);

@@ -15,7 +15,7 @@ HomeScreen::UpdateNotice::UpdateNotice (MeonEditor& e) : juce::Button ("update")
         {
             case MeonUpdater::State::Available: editor.startUpdate(); break;
             case MeonUpdater::State::Ready:     editor.installUpdate(); break;
-            case MeonUpdater::State::Failed:    u.check(); break;
+            case MeonUpdater::State::Failed:    if (! u.lastFailureWasPermission()) u.check(); break;
             default: break;
         }
     };
@@ -44,7 +44,11 @@ void HomeScreen::UpdateNotice::refresh()
             action = TXT ("다시 켜서 설치");
             break;
         case MeonUpdater::State::Failed:
-            if (u.lastFailureWasDownload())
+            if (u.lastFailureWasPermission())
+            {
+                message = TXT ("응용 프로그램 폴더에서 켜야 업데이트돼요");
+            }
+            else if (u.lastFailureWasDownload())
             {
                 message = TXT ("새 버전을 받지 못했어요");
                 action = TXT ("다시 시도");
