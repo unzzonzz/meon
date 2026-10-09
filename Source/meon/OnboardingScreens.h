@@ -114,8 +114,7 @@ private:
 };
 
 //==============================================================================
-class InputLevelScreen : public OnboardingPage,
-                         private juce::Timer
+class InputLevelScreen : public OnboardingPage
 {
 public:
     explicit InputLevelScreen (MeonEditor&);
@@ -134,10 +133,11 @@ private:
     double peakAtMs = 0.0;
     juce::Rectangle<int> meterBlock, okRow;
 
-    void timerCallback() override;
+    void onFrame();   // 화면 프레임마다 (VBlank) — 레벨 막대가 주사율에 맞춰 움직인다
     void updateLabels();
     void showChannelMenu();
     juce::String channelText() const;
+    juce::VBlankAttachment vblank { this, [this] { onFrame(); } };
 };
 
 } // namespace meon

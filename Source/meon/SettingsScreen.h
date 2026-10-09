@@ -43,7 +43,17 @@ private:
         void layout (int width, int topPad);
         void paint (juce::Graphics&) override;
         void refreshDevices();
-        void pushLevel (float db, double dt) { meter.push (db, dt); repaint (levelTextArea); }
+        void pushLevel (float db, double dt)
+        {
+            meter.push (db, dt);
+            const int shown = meter.getShownDb() <= -60.0f ? -60 : (int) std::lround (meter.getShownDb());
+            if (shown != lastLevelText)   // 숫자가 바뀔 때만 다시 그린다
+            {
+                lastLevelText = shown;
+                repaint (levelTextArea);
+            }
+        }
+        int lastLevelText = 1000;
 
         SettingsScreen& owner;
         const bool plugin;
@@ -83,7 +93,9 @@ private:
     int lastBlockSize = 0;
 
     void timerCallback() override;
+    void meterFrame();
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    std::unique_ptr<juce::VBlankAttachment> vblank;   // 레벨 막대: 화면 프레임마다 (독립 앱만)
 };
 
 } // namespace meon

@@ -3,6 +3,10 @@
 namespace meon
 {
 
+// 미터 소스의 피크 유지 시간. 한 화면 프레임(~17 ms)보다 조금 길게 해서 프레임 사이에 지나간 피크도 막대에 잡히게 한다.
+// 길면(예: 100 ms) 값이 계단처럼 바뀌어 막대가 덜컥거린다. 하강은 LevelBar 가 부드럽게 처리한다.
+static constexpr int kMeterHoldMs = 25;
+
 static const char* kCodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // 혼동 문자(O,0,I,1) 제외
 
 //==============================================================================
@@ -316,8 +320,8 @@ void MeonSession::applyProcessorDefaults()
     if (! isPlugin)
         setInputChannels (settings.getInputChannelStart(), settings.getInputChannelCount());
 
-    processor.getInputMeterSource().setMaxHoldMS (100);
-    processor.getSendMeterSource().setMaxHoldMS (100);
+    processor.getInputMeterSource().setMaxHoldMS (kMeterHoldMs);
+    processor.getSendMeterSource().setMaxHoldMS (kMeterHoldMs);
 }
 
 void MeonSession::setInputChannels (int start, int count)
@@ -341,7 +345,7 @@ void MeonSession::applyPeerDefaults (int peerIndex, Member& m)
         processor.setRemotePeerAudioCodecFormat (peerIndex, pcmFormatIndex);
     processor.setRemotePeerAutoresizeBufferMode (peerIndex, SonobusAudioProcessor::AutoNetBufferModeAutoFull);
     if (auto* src = processor.getRemotePeerRecvMeterSource (peerIndex))
-        src->setMaxHoldMS (100);
+        src->setMaxHoldMS (kMeterHoldMs);
     applyPeerPan (peerIndex, m.pan, false);
     m.defaultsApplied = true;
 }

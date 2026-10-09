@@ -524,6 +524,8 @@ SettingsScreen::SettingsScreen (MeonEditor& e)
     if (content.showUpdate)
         editor.getUpdater().addChangeListener (this);
     lastTickMs = juce::Time::getMillisecondCounterHiRes();
+    if (! plugin)
+        vblank = std::make_unique<juce::VBlankAttachment> (this, [this] { meterFrame(); });
     startTimerHz (30);
 }
 
@@ -555,14 +557,19 @@ void SettingsScreen::timerCallback()
         }
         return;
     }
-    const double now = juce::Time::getMillisecondCounterHiRes();
-    const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);
-    lastTickMs = now;
     if (content.showUpdate && content.inRoom != editor.getSession().isInRoom())
     {
         content.inRoom = editor.getSession().isInRoom();   // 합주 중에는 업데이트 버튼을 막는다
         content.refreshUpdate();
     }
+}
+
+// 레벨 막대는 화면 주사율에 맞춰 (VBlank) 움직인다
+void SettingsScreen::meterFrame()
+{
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);
+    lastTickMs = now;
     const int ch = editor.getSettings().getInputChannelStart();
     float db = editor.getSession().getMyInputLevelDb (ch);
     if (editor.getSettings().getInputChannelCount() == 2)
