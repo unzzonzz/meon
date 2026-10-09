@@ -107,22 +107,117 @@ float paragraphHeight (const juce::String& text, const juce::Font& font, float w
 void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
                              juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification)
 {
+    drawParagraphWithEmoji (g, text, font, colour, area, lineHeightPx, justification, {}, {});
+}
+
+/** links 범위만 linkColour·밑줄 글꼴로 넣은 AttributedString */
+static juce::AttributedString makeLinkedParagraph (const juce::String& text, const juce::Font& font, juce::Colour colour,
+                                                   float lineHeightPx, juce::Justification justification,
+                                                   const TextRanges& links, juce::Colour linkColour)
+{
+    juce::AttributedString as;
+    as.setJustification (justification);
+    auto linkFont = font;
+    linkFont.setUnderline (true);
+    int pos = 0;
+    for (auto r : links)
+    {
+        if (r.getStart() > pos)
+            as.append (text.substring (pos, r.getStart()), font, colour);
+        as.append (text.substring (r.getStart(), r.getEnd()), linkFont, linkColour);
+        pos = r.getEnd();
+    }
+    if (pos < text.length())
+        as.append (text.substring (pos), font, colour);
+    as.setLineSpacing (juce::jmax (0.0f, lineHeightPx - font.getHeight()));
+    return as;
+}
+
+void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
+                             juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification,
+                             const TextRanges& links, juce::Colour linkColour)
+{
     if constexpr (! emoji::nativeLayout)
     {
-        emoji::drawLines (g, emoji::layout (text, font, area.getWidth()), font, colour, area, lineHeightPx, justification);
+        emoji::drawLines (g, emoji::layout (text, font, area.getWidth()), font, colour, area, lineHeightPx, justification, links, linkColour);
         return;
     }
 
-    juce::AttributedString as;
-    as.setJustification (justification);
-    as.append (text, font, colour);
-    as.setLineSpacing (juce::jmax (0.0f, lineHeightPx - font.getHeight()));
+    auto as = makeLinkedParagraph (text, font, colour, lineHeightPx, justification, links, linkColour);
 
     // macOS 의 CTFrame 은 영역에 다 들어가지 않는 마지막 줄을 아예 빼 버린다. 위쪽 정렬이면 아래로 여유를 준다.
     if (justification.getOnlyVerticalFlags() == juce::Justification::top)
         area = area.withHeight (area.getHeight() + lineHeightPx * 2.0f);
 
     as.draw (g, area);   // macOS: CoreText 로 그려 컬러 이모지가 나온다. 그 외: TextLayout 으로 그린다.
+}
+
+int hitTestParagraphLink (const juce::String& text, const juce::Font& font, juce::Rectangle<float> area, float lineHeightPx,
+                          juce::Justification justification, const TextRanges& links, juce::Point<float> p)
+{
+    if (links.empty())
+        return -1;
+
+    if constexpr (! emoji::nativeLayout)
+        return emoji::hitTestLink (emoji::layout (text, font, area.getWidth()), font, area, lineHeightPx, justification, links, p);
+
+    // CoreText 배치를 그대로 받는다 (macOS 의 TextLayout 은 그릴 때와 같은 CTFrame 을 쓴다).
+    // TextLayout 은 줄을 왼쪽으로 붙여 버리므로 왼쪽 정렬로 배치하고, 오른쪽·가운데 정렬은 줄마다 직접 옮긴다.
+    auto as = makeLinkedParagraph (text, font, juce::Colours::black, lineHeightPx, juce::Justification::topLeft, links, juce::Colours::black);
+    juce::TextLayout layout;
+    layout.createLayout (as, area.getWidth());
+
+    // CoreText 의 글자 위치는 UTF-16 단위다 (이모지 등은 2칸)
+    const int n = text.length();
+    std::vector<int> utf16 ((size_t) n + 1, 0);
+    for (int i = 0; i < n; ++i)
+        utf16[(size_t) i + 1] = utf16[(size_t) i] + (text[i] >= 0x10000 ? 2 : 1);
+    auto toIndex = [&utf16] (int u) { return (int) (std::lower_bound (utf16.begin(), utf16.end(), u) - utf16.begin()); };
+
+    const float halfGap = juce::jmax (0.0f, lineHeightPx - font.getHeight()) * 0.5f;
+    for (int li = 0; li < layout.getNumLines(); ++li)
+    {
+        const auto& line = layout.getLine (li);
+        const float baseline = area.getY() + line.lineOrigin.y;
+        if (p.y < baseline - line.ascent - halfGap || p.y >= baseline + line.descent + halfGap)
+            continue;
+
+        float shift = 0.0f;
+        if (! justification.testFlags (juce::Justification::left))
+        {
+            float lineW = line.getLineBoundsX().getEnd();
+            const int endIndex = toIndex (line.stringRange.getEnd());   // 줄 끝 공백은 정렬 폭에 들어가지 않는다
+            if (endIndex > 0 && endIndex <= n && juce::CharacterFunctions::isWhitespace (text[endIndex - 1])
+                && ! line.runs.isEmpty() && ! line.runs.getLast()->glyphs.isEmpty())
+            {
+                const auto& glyphs = line.runs.getLast()->glyphs;
+                lineW -= glyphs.getReference (glyphs.size() - 1).width;
+            }
+            if (justification.testFlags (juce::Justification::right))
+                shift = area.getWidth() - lineW;
+            else if (justification.testFlags (juce::Justification::horizontallyCentred))
+                shift = (area.getWidth() - lineW) * 0.5f;
+        }
+
+        for (auto* run : line.runs)
+        {
+            if (run->glyphs.isEmpty())
+                continue;
+            const int index = toIndex (run->stringRange.getStart());
+            for (size_t k = 0; k < links.size(); ++k)
+            {
+                if (! links[k].contains (index))
+                    continue;
+                const auto& first = run->glyphs.getReference (0);   // Glyph 는 기본 생성자가 없어 getFirst/getLast 를 못 쓴다
+                const auto& last = run->glyphs.getReference (run->glyphs.size() - 1);
+                const float x0 = area.getX() + shift + line.lineOrigin.x + first.anchor.x;
+                const float x1 = area.getX() + shift + line.lineOrigin.x + last.anchor.x + last.width;
+                if (p.x >= x0 && p.x < x1)
+                    return (int) k;
+            }
+        }
+    }
+    return -1;
 }
 
 float paragraphHeightWithEmoji (const juce::String& text, const juce::Font& font, float width, float lineHeightPx)

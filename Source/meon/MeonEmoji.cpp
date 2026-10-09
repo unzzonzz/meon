@@ -302,7 +302,8 @@ static bool isCJK (juce::juce_wchar c)
 std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, float maxWidth)
 {
     const bool wrap = maxWidth > 0.0f;
-    const auto text = wrap ? textIn.replace ("\r\n", "\n") : textIn.replaceCharacters ("\r\n", "  ");
+    // 글자 위치(Piece::start)가 원래 문자열과 맞도록 글자 수를 바꾸지 않는다 ("\r\n" 의 '\r' 은 아래에서 건너뛴다)
+    const auto text = wrap ? textIn : textIn.replaceCharacters ("\r\n", "  ");
     const float emojiW = advanceForEm (font.getHeightInPoints());
     const int n = text.length();
 
@@ -324,17 +325,23 @@ std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, fl
         wrappedLine = wrapped;
         x = 0.0f;
     };
-    auto place = [&] (const juce::String& s, bool isEmoji, float w)
+    auto place = [&] (const juce::String& s, bool isEmoji, float w, int start)
     {
         if (wrap && x > 0.0f && x + w > maxWidth)
             newLine (true);
-        lines.back().pieces.push_back ({ s, isEmoji, x, w });
+        lines.back().pieces.push_back ({ s, isEmoji, x, w, start });
         x += w;
     };
 
     for (int i = 0; i < n;)
     {
         const auto c = text[i];
+
+        if (c == '\r' && i + 1 < n && text[i + 1] == '\n')
+        {
+            ++i;
+            continue;
+        }
 
         if (c == '\n')
         {
@@ -345,7 +352,7 @@ std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, fl
 
         if (const int end = clusterEnd (text, i); end > i)
         {
-            place (text.substring (i, end), true, emojiW);
+            place (text.substring (i, end), true, emojiW, i);
             i = end;
             continue;
         }
@@ -359,7 +366,7 @@ std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, fl
             {
                 const auto s = text.substring (i, j);
                 const float w = font.getStringWidthFloat (s);
-                lines.back().pieces.push_back ({ s, false, x, w });   // 공백은 줄 끝에 걸쳐도 된다
+                lines.back().pieces.push_back ({ s, false, x, w, i });   // 공백은 줄 끝에 걸쳐도 된다
                 x += w;
             }
             i = j;
@@ -369,7 +376,7 @@ std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, fl
         if (isCJK (c))
         {
             const auto s = text.substring (i, i + 1);
-            place (s, false, font.getStringWidthFloat (s));
+            place (s, false, font.getStringWidthFloat (s), i);
             ++i;
             continue;
         }
@@ -384,7 +391,7 @@ std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, fl
         const float w = font.getStringWidthFloat (word);
         if (! wrap || w <= maxWidth)
         {
-            place (word, false, w);
+            place (word, false, w, i);
         }
         else
         {
@@ -392,7 +399,7 @@ std::vector<Line> layout (const juce::String& textIn, const juce::Font& font, fl
             for (int k = 0; k < word.length(); ++k)
             {
                 const auto s = word.substring (k, k + 1);
-                place (s, false, font.getStringWidthFloat (s));
+                place (s, false, font.getStringWidthFloat (s), i + k);
             }
         }
         i = j;
@@ -409,45 +416,112 @@ float height (const std::vector<Line>& lines, const juce::Font& font, float line
     return font.getHeight() + (float) (lines.size() - 1) * juce::jmax (lineHeightPx, font.getHeight());
 }
 
-void drawLines (juce::Graphics& g, const std::vector<Line>& lines, const juce::Font& font, juce::Colour colour,
-                juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification)
+namespace
 {
-    const float step = juce::jmax (lineHeightPx, font.getHeight());
-    const float total = height (lines, font, lineHeightPx);
-    const float em = font.getHeightInPoints();
-
-    float top = area.getY();
-    if (justification.testFlags (juce::Justification::verticallyCentred))
-        top = area.getCentreY() - total * 0.5f;
-    else if (justification.testFlags (juce::Justification::bottom))
-        top = area.getBottom() - total;
-
-    g.setColour (colour);
-    for (size_t k = 0; k < lines.size(); ++k)
+    /** 그릴 조각 하나 (링크 경계에서 나눈 글자 조각이나 이모지 하나) */
+    struct Segment
     {
-        const auto& line = lines[k];
-        float left = area.getX();
-        if (justification.testFlags (juce::Justification::right))
-            left = area.getRight() - line.width;
-        else if (justification.testFlags (juce::Justification::horizontallyCentred))
-            left = area.getCentreX() - line.width * 0.5f;
+        juce::String text;
+        bool isEmoji;
+        float x, width, baseline, top, bottom;
+        int link;   // links 의 번호, 링크가 아니면 -1
+    };
 
-        const float baseline = top + font.getAscent() + (float) k * step;
+    template <typename Fn>
+    void forEachSegment (const std::vector<Line>& lines, const juce::Font& font, juce::Rectangle<float> area, float lineHeightPx,
+                         juce::Justification justification, const TextRanges& links, Fn&& fn)
+    {
+        const float step = juce::jmax (lineHeightPx, font.getHeight());
+        const float total = height (lines, font, lineHeightPx);
 
-        for (auto& p : line.pieces)
+        float top = area.getY();
+        if (justification.testFlags (juce::Justification::verticallyCentred))
+            top = area.getCentreY() - total * 0.5f;
+        else if (justification.testFlags (juce::Justification::bottom))
+            top = area.getBottom() - total;
+
+        auto linkAt = [&links] (int index)
         {
-            if (p.isEmoji)
+            for (size_t i = 0; i < links.size(); ++i)
+                if (links[i].contains (index))
+                    return (int) i;
+            return -1;
+        };
+
+        for (size_t k = 0; k < lines.size(); ++k)
+        {
+            const auto& line = lines[k];
+            float left = area.getX();
+            if (justification.testFlags (juce::Justification::right))
+                left = area.getRight() - line.width;
+            else if (justification.testFlags (juce::Justification::horizontallyCentred))
+                left = area.getCentreX() - line.width * 0.5f;
+
+            const float baseline = top + font.getAscent() + (float) k * step;
+            const float rowTop = baseline - font.getAscent() - (step - font.getHeight()) * 0.5f;
+
+            for (auto& p : line.pieces)
             {
-                draw (g, p.text, em, left + p.x, p.width, baseline);
-            }
-            else if (p.text.trim().isNotEmpty())
-            {
-                juce::GlyphArrangement ga;
-                ga.addLineOfText (font, p.text, left + p.x, baseline);
-                ga.draw (g);
+                if (p.isEmoji)
+                {
+                    fn (Segment { p.text, true, left + p.x, p.width, baseline, rowTop, rowTop + step, linkAt (p.start) });
+                    continue;
+                }
+
+                const int len = p.text.length();
+                for (int a = 0; a < len;)
+                {
+                    const int link = linkAt (p.start + a);
+                    int b = a + 1;
+                    while (b < len && linkAt (p.start + b) == link)
+                        ++b;
+                    const float x0 = a == 0 ? 0.0f : font.getStringWidthFloat (p.text.substring (0, a));
+                    const float x1 = b == len ? p.width : font.getStringWidthFloat (p.text.substring (0, b));
+                    fn (Segment { p.text.substring (a, b), false, left + p.x + x0, x1 - x0, baseline, rowTop, rowTop + step, link });
+                    a = b;
+                }
             }
         }
     }
+}
+
+void drawLines (juce::Graphics& g, const std::vector<Line>& lines, const juce::Font& font, juce::Colour colour,
+                juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification,
+                const TextRanges& links, juce::Colour linkColour)
+{
+    const float em = font.getHeightInPoints();
+    const float underline = juce::jmax (1.0f, font.getDescent() * 0.3f);   // GlyphArrangement 의 밑줄과 같은 비율
+
+    forEachSegment (lines, font, area, lineHeightPx, justification, links, [&] (const Segment& s)
+    {
+        g.setColour (s.link >= 0 ? linkColour : colour);
+        if (s.isEmoji)
+        {
+            draw (g, s.text, em, s.x, s.width, s.baseline);
+        }
+        else if (s.text.trim().isNotEmpty())
+        {
+            juce::GlyphArrangement ga;
+            ga.addLineOfText (font, s.text, s.x, s.baseline);
+            ga.draw (g);
+        }
+        if (s.link >= 0)
+            g.fillRect (juce::Rectangle<float> (s.x, s.baseline + underline * 2.0f, s.width, underline));
+    });
+}
+
+int hitTestLink (const std::vector<Line>& lines, const juce::Font& font, juce::Rectangle<float> area, float lineHeightPx,
+                 juce::Justification justification, const TextRanges& links, juce::Point<float> p)
+{
+    int found = -1;
+    if (links.empty())
+        return found;
+    forEachSegment (lines, font, area, lineHeightPx, justification, links, [&] (const Segment& s)
+    {
+        if (s.link >= 0 && p.x >= s.x && p.x < s.x + s.width && p.y >= s.top && p.y < s.bottom)
+            found = s.link;
+    });
+    return found;
 }
 
 } // namespace meon::emoji

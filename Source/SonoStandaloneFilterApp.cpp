@@ -54,15 +54,23 @@
 
 extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
-// JUCE 플러그인 클라이언트 헤더가 정의하는 `Component` 매크로(juce::Component)는 MEON 헤더의 juce:: 한정 이름과 충돌한다.
+// JUCE 플러그인 클라이언트 헤더가 정의하는 `Component`·`Point` 매크로(juce::Component, macOS 는 juce::Point)는
+// MEON 헤더의 juce:: 한정 이름과 충돌한다.
 #ifdef Component
  #undef Component
  #define MEON_RESTORE_COMPONENT_MACRO 1
+#endif
+#ifdef Point
+ #undef Point
+ #define MEON_RESTORE_POINT_MACRO 1
 #endif
 #include "SonoStandaloneFilterWindow.h"
 #include "meon/MeonEditor.h"
 #if MEON_RESTORE_COMPONENT_MACRO
  #define Component juce::Component
+#endif
+#if MEON_RESTORE_POINT_MACRO
+ #define Point juce::Point
 #endif
 
 #if JUCE_WINDOWS

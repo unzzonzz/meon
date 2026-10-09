@@ -90,6 +90,18 @@ void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const 
                              juce::Rectangle<float> area, float lineHeightPx,
                              juce::Justification justification = juce::Justification::topLeft);
 
+/** 문단 속 링크 범위들 (글자 위치, 끝 미포함, 앞에서부터 겹치지 않게) */
+using TextRanges = std::vector<juce::Range<int>>;
+
+/** 위와 같고, links 범위는 linkColour 와 밑줄로 그린다. */
+void drawParagraphWithEmoji (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Colour colour,
+                             juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification,
+                             const TextRanges& links, juce::Colour linkColour);
+
+/** 같은 인자로 그린 문단에서 p 가 links 의 몇 번째 위에 있는지 (없으면 -1). 위쪽 정렬만 지원한다. */
+int hitTestParagraphLink (const juce::String& text, const juce::Font& font, juce::Rectangle<float> area, float lineHeightPx,
+                          juce::Justification justification, const TextRanges& links, juce::Point<float> p);
+
 float paragraphHeightWithEmoji (const juce::String& text, const juce::Font& font, float width, float lineHeightPx);
 
 /** 한 줄 텍스트를 이모지까지 그린다. 넘치면 끝을 '…' 로 줄인다. */
