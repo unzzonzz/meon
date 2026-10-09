@@ -80,6 +80,7 @@ private:
     juce::Viewport viewport;
     Content content;
     double lastTickMs = 0.0;
+    int lastBlockSize = 0;
 
     void timerCallback() override;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;

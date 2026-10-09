@@ -258,7 +258,7 @@ void MeonEditor::copyRoomCodeToClipboard()
 juce::String MeonEditor::getHostDescription() const
 {
     if (! pluginMode)
-        return "MEON";
+        return "Meon";
     juce::PluginHostType host;
     juce::String desc (host.getHostDescription());
     if (desc.isEmpty() || desc == "Unknown")
@@ -268,7 +268,7 @@ juce::String MeonEditor::getHostDescription() const
 
 juce::String MeonEditor::getVersionText() const
 {
-    juce::String v = "MEON " + juce::String (MEON_BUILD_VERSION);
+    juce::String v = "Meon " + juce::String (MEON_BUILD_VERSION);
     if (pluginMode)
         v += " (AU / VST3)";
     else
@@ -284,7 +284,7 @@ MeonSessionLog::AudioInfo MeonEditor::collectAudioInfo() const
         info.deviceType = "host";
         info.host = getHostDescription();
         info.sampleRate = processor.getSampleRate();
-        info.bufferSize = processor.getBlockSize();
+        info.bufferSize = processor.getCurrSamplesPerBlock();
     }
     else if (auto* dm = deviceManager())
     {

@@ -249,7 +249,7 @@ juce::String SettingsScreen::Content::updateDetail() const
         case MeonUpdater::State::Downloading:
             return now + TXT (" → build ") + juce::String (u.getLatestBuild()) + TXT (" · 다 받으면 앱이 다시 켜져요");
         case MeonUpdater::State::Failed:
-            return u.lastFailureWasPermission() ? TXT ("MEON 을 응용 프로그램 폴더로 옮긴 뒤 다시 켜 주세요")
+            return u.lastFailureWasPermission() ? TXT ("Meon 을 응용 프로그램 폴더로 옮긴 뒤 다시 켜 주세요")
                                                 : TXT ("인터넷 연결을 확인하고 다시 시도해 주세요");
         default:
             return now;
@@ -478,7 +478,7 @@ void SettingsScreen::Content::paint (juce::Graphics& g)
         g.drawText (TXT ("장치와 버퍼는 DAW 설정을 따릅니다"), inner.removeFromTop (18), juce::Justification::centredLeft, false);
         inner.removeFromTop (6);
         const double sr = owner.editor.getProcessor().getSampleRate();
-        const int bs = owner.editor.getProcessor().getBlockSize();
+        const int bs = owner.editor.getProcessor().getCurrSamplesPerBlock();   // 실제 블록 크기 (Logic 은 I/R 을 켜면 prepareToPlay 없이 바꾼다)
         const double ms = sr > 0.0 ? bs / sr * 1000.0 : 0.0;
         g.setColour (col::inkSub);
         g.setFont (Fonts::get (400, 13.0f));
@@ -545,7 +545,16 @@ void SettingsScreen::changeListenerCallback (juce::ChangeBroadcaster* source)
 void SettingsScreen::timerCallback()
 {
     if (plugin)
+    {
+        // 호스트 블록 크기가 바뀌면 오디오 칸을 다시 그린다
+        const int bs = editor.getProcessor().getCurrSamplesPerBlock();
+        if (bs != lastBlockSize)
+        {
+            lastBlockSize = bs;
+            content.repaint();
+        }
         return;
+    }
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);
     lastTickMs = now;

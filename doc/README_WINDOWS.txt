@@ -1,4 +1,4 @@
-MEON
+Meon
 
 인터넷으로 함께 합주하는 앱.
 
@@ -6,7 +6,7 @@ MEON
 설치 (Windows)
 ==============
 
-'MEON-x.y.z-Installer.exe' 를 실행하세요. MEON 앱과 (선택) VST3 플러그인이 설치됩니다.
+'meon-x.y.z-setup.exe' 를 실행하세요. Meon 앱과 (선택) VST3 플러그인이 설치됩니다.
 
 설치 파일에 코드 서명이 없어서 "Windows의 PC 보호" 창이 뜰 수 있습니다.
 '추가 정보' → '실행' 을 누르면 설치됩니다.

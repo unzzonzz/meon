@@ -222,7 +222,7 @@ void HomeScreen::paint (juce::Graphics& g)
     if (plugin)
     {
         const double sr = editor.getProcessor().getSampleRate();
-        const int bs = editor.getProcessor().getBlockSize();
+        const int bs = editor.getProcessor().getCurrSamplesPerBlock();   // 실제 블록 크기 (Logic 은 I/R 을 켜면 prepareToPlay 없이 바꾼다)
         hostText = editor.getHostDescription() + " " + juce::String (sr / 1000.0, sr >= 1000.0 && std::fmod (sr, 1000.0) == 0.0 ? 0 : 1)
                    + " kHz / " + juce::String (bs) + TXT (" 샘플");
     }

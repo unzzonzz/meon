@@ -6,8 +6,8 @@ macOS / Windows 독립 앱 + 플러그인(AU / VST3). UI 문구는 한국어 존
 ## 배포 구조: main 머지 = 모든 사용자에게 배포
 
 - main 에 push(머지)할 때마다 `.github/workflows/mac.yml`, `windows.yml` 가 빌드해서 프리릴리스에 올린다.
-  - macOS: `mac-latest` 에 `MEON.dmg`, `MEON-mac.zip`, `build.txt`
-  - Windows: `windows-latest` 에 `MEON-Installer.exe`, `build.txt`
+  - macOS: `mac-latest` 에 `meon.dmg`(사용자 다운로드), `MEON-mac.zip`, `build.txt`
+  - Windows: `windows-latest` 에 `meon-setup.exe`(사용자 다운로드), `MEON-Installer.exe`(같은 파일, 자동 업데이트용), `build.txt`
 - 독립 앱은 켤 때 `build.txt` 와 내 빌드 번호(`MEON_BUILD_ID` = 그 워크플로의 `run_number`)를 비교해서 자동 업데이트한다 (`Source/meon/MeonUpdater.*`).
 - 따라서 **덜 된 기능은 main 에 머지하지 않는다.** 따로 출시 단계가 없다.
 
@@ -29,10 +29,11 @@ macOS / Windows 독립 앱 + 플러그인(AU / VST3). UI 문구는 한국어 존
 ## 건드리면 자동 업데이트가 깨지는 것 (바꿔야 하면 먼저 사용자에게 묻는다)
 
 - **워크플로 파일 이름 변경·삭제 후 재생성 금지.** `run_number` 가 1 부터 다시 시작해서, 이미 설치된 앱이 새 빌드를 옛 빌드로 보고 영원히 업데이트하지 않는다.
-- 릴리스 태그(`mac-latest`, `windows-latest`)와 파일 이름(`MEON.dmg`, `MEON-mac.zip`, `MEON-Installer.exe`, `build.txt`) — 앱 코드에 하드코딩돼 있다.
+- 릴리스 태그(`mac-latest`, `windows-latest`)와 자동 업데이트용 파일 이름(`MEON-mac.zip`, `MEON-Installer.exe`, `build.txt`) — 이미 설치된 앱 코드에 하드코딩돼 있다. (`meon.dmg`, `meon-setup.exe` 는 사람이 받는 파일이라 앱과 무관)
 - 릴리스에 `build.txt` 를 **마지막에** 올리는 순서. 먼저 올리면 앱이 반쯤 올라간 파일을 받는다.
-- 앱 이름 `MEON.app` / `MEON.exe`, 번들 ID `com.meon.MEON`, 제조사·플러그인 코드 (`Meon`, `Mjam`).
-- macOS 업데이트는 `MEON-mac.zip` 안에 `MEON.app` 이 최상위로 들어 있다고 가정한다 (`ditto -c -k --keepParent`).
+- 앱 이름 `Meon.app` / `Meon.exe` (CMake 타깃 이름은 `MEON`), 번들 ID `com.meon.MEON`, 제조사·플러그인 코드 (`Meon`, `Mjam`), Inno Setup `AppId`.
+  - 예전 이름은 `MEON.app` / `MEON.exe`. 옛 앱은 대소문자를 가리지 않는 파일 시스템 덕분에 새 파일을 찾는다. 새 업데이터는 `MEON.app` 을 `Meon.app` 으로 바꿔 넣는다.
+- macOS 업데이트는 `MEON-mac.zip` 안에 `Meon.app` 이 최상위로 들어 있다고 가정한다 (`ditto -c -k --keepParent`).
 - Windows 업데이트는 `release/wininstaller.iss` 의 `/UPDATE=1` 처리에 의존한다.
 
 ## 서명

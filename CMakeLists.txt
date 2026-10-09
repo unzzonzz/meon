@@ -151,7 +151,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         NEEDS_MIDI_INPUT TRUE
         NEEDS_MIDI_OUTPUT TRUE
         EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-        COMPANY_NAME "MEON"
+        COMPANY_NAME "Meon"
         BUNDLE_ID "com.meon.MEON"
         MICROPHONE_PERMISSION_ENABLED TRUE
         
@@ -175,7 +175,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         PLUGIN_MANUFACTURER_CODE Meon
         PLUGIN_CODE ${plugincode}
         FORMATS ${formats}
-        DESCRIPTION "MEON - Online Jam Session"
+        DESCRIPTION "Meon - Online Jam Session"
         PRODUCT_NAME "${product_name}")
 
     juce_generate_juce_header("${target_name}")
@@ -527,21 +527,21 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
 endfunction()
 
 # MEON: 독립 앱 + AU + VST3 (하나의 타깃)
-sono_add_custom_plugin_target(MEON MEON "${FormatsToBuild}" FALSE  "Mjam")
+sono_add_custom_plugin_target(MEON Meon "${FormatsToBuild}" FALSE  "Mjam")
 
-# 개발용: 독립 앱을 빌드할 때마다 고정 경로(기본 /Applications/MEON.app)로 덮어쓴다.
+# 개발용: 독립 앱을 빌드할 때마다 고정 경로(기본 /Applications/Meon.app)로 덮어쓴다.
 # Dock 에 이 경로를 고정해 두면 항상 최신 빌드가 열린다. 끄려면 -DMEON_DEV_INSTALL_DIR=
 if (APPLE AND TARGET MEON_Standalone)
-    set(MEON_DEV_INSTALL_DIR "/Applications" CACHE PATH "빌드 후 MEON.app 을 복사할 폴더 (비우면 복사 안 함)")
+    set(MEON_DEV_INSTALL_DIR "/Applications" CACHE PATH "빌드 후 Meon.app 을 복사할 폴더 (비우면 복사 안 함)")
     if (MEON_DEV_INSTALL_DIR)
         # rsync 는 새 파일을 임시 이름으로 쓴 뒤 바꿔치기하므로 실행 중인 앱이 있어도 안전하다.
         # 번들 폴더 자체는 그대로 두므로 Dock 고정·권한(마이크) 기록이 유지된다.
         add_custom_command(TARGET MEON_Standalone POST_BUILD
-            COMMAND mkdir -p "${MEON_DEV_INSTALL_DIR}/MEON.app"
-            COMMAND rsync -a --delete "$<TARGET_BUNDLE_DIR:MEON_Standalone>/" "${MEON_DEV_INSTALL_DIR}/MEON.app/"
-            COMMAND codesign --force --sign - "${MEON_DEV_INSTALL_DIR}/MEON.app"
-            COMMAND /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${MEON_DEV_INSTALL_DIR}/MEON.app"
-            COMMENT "MEON.app -> ${MEON_DEV_INSTALL_DIR}/MEON.app"
+            COMMAND mkdir -p "${MEON_DEV_INSTALL_DIR}/Meon.app"
+            COMMAND rsync -a --delete "$<TARGET_BUNDLE_DIR:MEON_Standalone>/" "${MEON_DEV_INSTALL_DIR}/Meon.app/"
+            COMMAND codesign --force --sign - "${MEON_DEV_INSTALL_DIR}/Meon.app"
+            COMMAND /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${MEON_DEV_INSTALL_DIR}/Meon.app"
+            COMMENT "Meon.app -> ${MEON_DEV_INSTALL_DIR}/Meon.app"
             VERBATIM)
     endif()
 endif()

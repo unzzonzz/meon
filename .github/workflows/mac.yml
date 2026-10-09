@@ -1,8 +1,10 @@
-# macOS 빌드: main 에 push 할 때마다 MEON 디스크 이미지(.dmg)를 만든다.
+# macOS 빌드: main 에 push 할 때마다 Meon 디스크 이미지(.dmg)를 만든다.
 # - 실행 결과 페이지의 Artifacts 에서 받을 수 있고,
 # - main 빌드는 'mac-latest' 프리릴리스에도 올라가서 항상 같은 주소로 최신 파일을 받을 수 있다:
-#   https://github.com/unzzonzz/meon/releases/download/mac-latest/MEON.dmg
+#   https://github.com/unzzonzz/meon/releases/download/mac-latest/meon.dmg
 # - 같은 릴리스에 앱 자동 업데이트용 MEON-mac.zip 과 build.txt(빌드 번호)도 올린다 (Source/meon/MeonUpdater.h).
+#   이 둘은 이미 설치된 앱에 이름이 박혀 있으므로 바꾸지 않는다. 앱은 Meon.app 이고, zip 안의 최상위도 Meon.app 이다
+#   (옛 앱은 MEON.app 을 찾지만 macOS 볼륨이 대소문자를 가리지 않아서 찾는다).
 # - 유니버설(Intel + Apple Silicon) 빌드. Apple 개발자 서명·공증은 하지 않고 ad-hoc 서명만 한다.
 #   처음 열 때 경고를 넘기는 방법은 doc/INSTALL.md 참고.
 name: macOS build
@@ -41,26 +43,26 @@ jobs:
         # Apple Silicon 은 서명 없는 실행 파일을 아예 실행하지 않는다. 개발자 ID 가 없으니 ad-hoc 으로만 서명한다.
         run: |
           A=build/MEON_artefacts/Release
-          for b in "$A/Standalone/MEON.app" "$A/AU/MEON.component" "$A/VST3/MEON.vst3"; do
+          for b in "$A/Standalone/Meon.app" "$A/AU/Meon.component" "$A/VST3/Meon.vst3"; do
             codesign --force --deep --sign - "$b"
             codesign --verify --verbose "$b"
           done
-          lipo -info "$A/Standalone/MEON.app/Contents/MacOS/MEON"
+          lipo -info "$A/Standalone/Meon.app/Contents/MacOS/Meon"
 
       - name: 디스크 이미지 만들기
         run: |
           A=build/MEON_artefacts/Release
           STAGE=dmgstage
           mkdir -p "$STAGE/플러그인"
-          cp -R "$A/Standalone/MEON.app" "$STAGE/"
+          cp -R "$A/Standalone/Meon.app" "$STAGE/"
           ln -s /Applications "$STAGE/Applications"
-          cp -R "$A/AU/MEON.component" "$A/VST3/MEON.vst3" "$STAGE/플러그인/"
+          cp -R "$A/AU/Meon.component" "$A/VST3/Meon.vst3" "$STAGE/플러그인/"
           cp doc/INSTALL.md "$STAGE/설치 안내.md"
           mkdir -p dist
-          hdiutil create -volname "MEON ${{ steps.ver.outputs.version }}" -srcfolder "$STAGE" \
-            -fs HFS+ -format UDZO -ov "dist/MEON-${{ steps.ver.outputs.version }}-mac.dmg"
+          hdiutil create -volname "Meon ${{ steps.ver.outputs.version }}" -srcfolder "$STAGE" \
+            -fs HFS+ -format UDZO -ov "dist/meon-${{ steps.ver.outputs.version }}.dmg"
           # 자동 업데이트용: 앱만 담은 zip (ditto 는 서명과 심볼릭 링크를 그대로 보존한다)
-          ditto -c -k --keepParent "$A/Standalone/MEON.app" dist/MEON-mac.zip
+          ditto -c -k --keepParent "$A/Standalone/Meon.app" dist/MEON-mac.zip
           ls -la dist
 
       - uses: actions/upload-artifact@v4
@@ -73,12 +75,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp dist/MEON-*-mac.dmg MEON.dmg
+          cp dist/meon-*.dmg meon.dmg
           cp dist/MEON-mac.zip MEON-mac.zip
           NOTES="main $(git rev-parse --short HEAD) 빌드 (v${{ steps.ver.outputs.version }}, run ${{ github.run_number }})"
           gh release delete mac-latest --yes --cleanup-tag || true
-          gh release create mac-latest MEON.dmg MEON-mac.zip --prerelease --target "$GITHUB_SHA" \
-            --title "MEON macOS (최신 main 빌드)" --notes "$NOTES"
+          gh release create mac-latest meon.dmg MEON-mac.zip --prerelease --target "$GITHUB_SHA" \
+            --title "Meon macOS (최신 main 빌드)" --notes "$NOTES"
           # 앱의 업데이트 확인용 빌드 번호. zip 이 다 올라간 뒤에 올려야 앱이 반쯤 올라간 파일을 받지 않는다.
           echo "${{ github.run_number }}" > build.txt
           gh release upload mac-latest build.txt
