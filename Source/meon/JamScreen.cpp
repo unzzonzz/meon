@@ -199,6 +199,277 @@ private:
 };
 
 //==============================================================================
+/** 파일 플레이어 (MR). 내 영역 바로 아래.
+    1줄 [파일 열기][이름 ×] … [볼륨 · dB], 2줄 [재생/정지][현재 · 위치 바 · 전체]. 파일이 없으면 1줄만.
+    재생 소리는 엔진이 내 송신에 섞어 보낸다 (다른 멤버 화면에는 표시 없음). */
+class JamScreen::FilePlayer : public juce::Component
+{
+public:
+    explicit FilePlayer (JamScreen& o) : owner (o), plugin (o.isPlugin()), openButton (TXT ("파일 열기")), playButton (TXT ("재생"))
+    {
+        openButton.setFont (plugin ? 13.0f : 15.0f, 600);
+        openButton.onClick = [this] { chooseFile(); };
+        playButton.setFont (plugin ? 13.0f : 15.0f, 600);
+        playButton.onClick = [this] { auto& s = session(); s.setPlaybackPlaying (! s.isPlaybackPlaying()); };
+        closeButton.onClick = [this] { session().closePlaybackFile(); };
+        closeButton.setTooltip (TXT ("파일 닫기"));
+
+        const int thumb = plugin ? 14 : 16;
+        for (auto* sl : { &volume, &seek })
+        {
+            sl->setSliderStyle (juce::Slider::LinearHorizontal);
+            sl->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+            sl->setScrollWheelEnabled (false);
+            sl->setWantsKeyboardFocus (false);
+            sl->setMouseCursor (juce::MouseCursor::PointingHandCursor);
+            sl->setColour (juce::Slider::backgroundColourId, col::cardBorder);
+            sl->getProperties().set ("meonThumb", thumb);
+        }
+        // 볼륨 -30 ~ +10 dB (맨 왼쪽은 소리 없음), 0 dB 근처는 붙고, 더블클릭 0 dB
+        volume.setRange (MeonSession::playbackMinDb, MeonSession::playbackMaxDb, 0.5);
+        volume.setDoubleClickReturnValue (true, 0.0);
+        volume.setTooltip (TXT ("더블클릭하면 0 dB"));
+        volume.onValueChange = [this]
+        {
+            if (syncing)
+                return;
+            if (std::abs (volume.getValue()) < 1.25 && volume.getValue() != 0.0)
+            {
+                volume.setValue (0.0, juce::dontSendNotification);
+            }
+            session().setPlaybackGainDb ((float) volume.getValue());
+            repaint (volTextArea);
+        };
+        seek.setRange (0.0, 1.0, 0.0);
+        seek.onValueChange = [this]
+        {
+            if (! syncing)
+            {
+                session().setPlaybackPosition (seek.getValue());
+                repaint (curArea);
+            }
+        };
+
+        addAndMakeVisible (openButton);
+        addChildComponent (closeButton);
+        addChildComponent (volume);
+        addChildComponent (playButton);
+        addChildComponent (seek);
+        update();
+    }
+
+    /** 파일이 있으면 두 줄 */
+    int preferredHeight() const
+    {
+        const int one = plugin ? 48 : 62;
+        return session().hasPlaybackFile() ? one + (plugin ? 6 + 30 : 10 + 38) : one;
+    }
+
+    void update()
+    {
+        auto& s = session();
+        const bool loaded = s.hasPlaybackFile();
+        const bool playing = loaded && s.isPlaybackPlaying();
+        wasPlaying = playing;
+        fileName = s.getPlaybackFileName();
+        closeButton.setVisible (loaded);
+        volume.setVisible (loaded);
+        playButton.setVisible (loaded);
+        seek.setVisible (loaded);
+        playButton.setLabel (playing ? TXT ("정지") : TXT ("재생"));
+        playButton.setStyle (playing ? MeonButton::Style::Primary : MeonButton::Style::Secondary);
+        syncing = true;
+        volume.setValue (s.getPlaybackGainDb(), juce::dontSendNotification);
+        const double len = s.getPlaybackLength();
+        seek.setRange (0.0, juce::jmax (0.1, len), 0.0);
+        seek.setValue (s.getPlaybackPosition(), juce::dontSendNotification);
+        syncing = false;
+        resized();
+        repaint();
+    }
+
+    /** 합주 화면 타이머 (30 Hz): 위치·시간 갱신, 끝까지 재생돼서 멈춘 것 반영 */
+    void tick (double nowMs)
+    {
+        if (errorUntilMs > 0.0 && nowMs > errorUntilMs)
+        {
+            errorUntilMs = 0.0;
+            repaint();
+        }
+        auto& s = session();
+        if (! s.hasPlaybackFile())
+            return;
+        if (s.isPlaybackPlaying() != wasPlaying)
+        {
+            update();
+            return;
+        }
+        if (! seek.isMouseButtonDown())
+        {
+            syncing = true;
+            seek.setValue (s.getPlaybackPosition(), juce::dontSendNotification);
+            syncing = false;
+        }
+        repaint (curArea);
+    }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced (plugin ? 14 : 20, plugin ? 8 : 12);
+        const int rowH = plugin ? 30 : 38;
+        const int gap = plugin ? 12 : 16;
+        const int thumbR = plugin ? 7 : 8, sliderH = thumbR * 2;
+        const auto font = Fonts::get (600, plugin ? 13.0f : 15.0f);
+
+        // 1줄
+        auto row = r.removeFromTop (rowH);
+        openButton.setBounds (row.removeFromLeft (openButton.getIdealWidth (plugin ? 10 : 14)));
+        row.removeFromLeft (gap);
+        nameArea = closeArea = volLabelArea = volTextArea = {};
+        if (session().hasPlaybackFile())
+        {
+            volTextArea = row.removeFromRight (plugin ? 54 : 62);
+            row.removeFromRight (gap);
+            const int volW = plugin ? 110 : 160;
+            auto volTrack = row.removeFromRight (volW);
+            volume.setBounds (volTrack.getX() - thumbR, volTrack.getCentreY() - thumbR, volW + thumbR * 2, sliderH);
+            row.removeFromRight (gap);
+            const auto labelFont = Fonts::get (500, plugin ? 12.0f : 13.0f);
+            volLabelArea = row.removeFromRight ((int) std::ceil (labelFont.getStringWidthFloat (TXT ("볼륨"))) + 1);
+            row.removeFromRight (gap);
+
+            const int closeD = plugin ? 20 : 24;
+            const int nameW = juce::jmin ((int) std::ceil (font.getStringWidthFloat (fileName)) + 2, row.getWidth() - closeD - (plugin ? 4 : 6));
+            nameArea = row.removeFromLeft (juce::jmax (0, nameW));
+            row.removeFromLeft (plugin ? 4 : 6);
+            closeButton.setBounds (row.getX(), row.getCentreY() - closeD / 2, closeD, closeD);
+
+            // 2줄
+            r.removeFromTop (plugin ? 6 : 10);
+            auto row2 = r.removeFromTop (rowH);
+            playButton.setBounds (row2.removeFromLeft (plugin ? 52 : 64));
+            row2.removeFromLeft (gap);
+            const int timeW = plugin ? 34 : 40;
+            curArea = row2.removeFromLeft (timeW);
+            row2.removeFromLeft (gap);
+            durArea = row2.removeFromRight (timeW);
+            row2.removeFromRight (gap);
+            seek.setBounds (row2.getX() - thumbR, row2.getCentreY() - thumbR, row2.getWidth() + thumbR * 2, sliderH);
+        }
+        else
+        {
+            errorArea = row;
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto r = getLocalBounds().toFloat();
+        g.setColour (col::white);
+        g.fillRoundedRectangle (r, (float) metric::radiusCard);
+        g.setColour (col::cardBorder);
+        g.drawRoundedRectangle (r.reduced (0.5f), (float) metric::radiusCard, 1.0f);
+
+        auto& s = session();
+        if (! s.hasPlaybackFile())
+        {
+            if (errorUntilMs > 0.0)
+            {
+                g.setColour (col::inkSub);
+                g.setFont (Fonts::get (500, plugin ? 12.0f : 13.0f));
+                g.drawText (TXT ("열 수 없는 파일이에요"), errorArea, juce::Justification::centredLeft, true);
+            }
+            return;
+        }
+
+        g.setColour (col::ink);
+        g.setFont (Fonts::get (600, plugin ? 13.0f : 15.0f));
+        g.drawText (fileName, nameArea, juce::Justification::centredLeft, true);
+
+        g.setColour (col::inkSub);
+        g.setFont (Fonts::get (500, plugin ? 12.0f : 13.0f));
+        g.drawText (TXT ("볼륨"), volLabelArea, juce::Justification::centredLeft, false);
+
+        const double db = volume.getValue();
+        const juce::String volText = db <= MeonSession::playbackMinDb ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB"))
+                                                                       : (db > 0.05 ? "+" : "") + juce::String (db, 1) + " dB";
+        g.setColour (col::ink);
+        g.setFont (Fonts::get (600, plugin ? 12.0f : 14.0f));
+        g.drawText (volText, volTextArea, juce::Justification::centredRight, false);
+
+        g.drawText (timeText (seek.isMouseButtonDown() ? seek.getValue() : s.getPlaybackPosition()), curArea, juce::Justification::centredRight, false);
+        g.setColour (col::inkSub);
+        g.setFont (Fonts::get (500, plugin ? 12.0f : 14.0f));
+        g.drawText (timeText (s.getPlaybackLength()), durArea, juce::Justification::centredLeft, false);
+    }
+
+private:
+    /** 파일 닫기 ×: 배경 없음, #AAAAAA. 마우스를 올리면 #F0F0F0 배경 + #1A1A1A */
+    class CloseButton : public juce::Button
+    {
+    public:
+        CloseButton() : juce::Button ("close") { setMouseCursor (juce::MouseCursor::PointingHandCursor); setWantsKeyboardFocus (false); }
+        void paintButton (juce::Graphics& g, bool over, bool down) override
+        {
+            auto r = getLocalBounds().toFloat();
+            if (over || down)
+            {
+                g.setColour (col::titleBar);
+                g.fillRoundedRectangle (r, 4.0f);
+            }
+            const float h = r.getHeight() * 0.18f;   // × 반 길이 (24 → 약 4.3)
+            const auto c = r.getCentre();
+            g.setColour ((over || down) ? col::ink : col::disabled);
+            g.drawLine (c.x - h, c.y - h, c.x + h, c.y + h, 1.4f);
+            g.drawLine (c.x - h, c.y + h, c.x + h, c.y - h, 1.4f);
+        }
+    };
+
+    JamScreen& owner;
+    const bool plugin;
+    MeonButton openButton, playButton;
+    CloseButton closeButton;
+    juce::Slider volume, seek;
+    std::unique_ptr<juce::FileChooser> chooser;
+    juce::String fileName;
+    juce::Rectangle<int> nameArea, closeArea, volLabelArea, volTextArea, curArea, durArea, errorArea;
+    bool syncing = false, wasPlaying = false;
+    double errorUntilMs = 0.0;
+
+    MeonSession& session() const { return owner.getEditor().getSession(); }
+
+    static juce::String timeText (double seconds)
+    {
+        const int t = (int) std::floor (juce::jmax (0.0, seconds));
+        return juce::String (t / 60) + ":" + juce::String (t % 60).paddedLeft ('0', 2);
+    }
+
+    void chooseFile()
+    {
+        static juce::File lastFolder;   // 이번 실행 동안 마지막으로 연 폴더
+        const auto start = lastFolder.isDirectory() ? lastFolder : juce::File::getSpecialLocation (juce::File::userMusicDirectory);
+        chooser = std::make_unique<juce::FileChooser> (TXT ("재생할 오디오 파일"), start,
+                                                        session().getProcessor().getFormatManager().getWildcardForAllFormats());
+        juce::Component::SafePointer<FilePlayer> safe (this);
+        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                              [safe] (const juce::FileChooser& fc)
+        {
+            if (safe == nullptr)
+                return;
+            const auto file = fc.getResult();
+            if (file == juce::File())
+                return;
+            lastFolder = file.getParentDirectory();
+            if (! safe->session().loadPlaybackFile (file))
+            {
+                safe->errorUntilMs = juce::Time::getMillisecondCounterHiRes() + 4000.0;
+                safe->repaint();
+            }
+        });
+    }
+};
+
+//==============================================================================
 class JamScreen::MemberCard : public juce::Component
 {
 public:
@@ -977,6 +1248,8 @@ JamScreen::JamScreen (MeonEditor& e)
 
     me = std::make_unique<MyPanel> (*this);
     addAndMakeVisible (*me);
+    player = std::make_unique<FilePlayer> (*this);
+    addAndMakeVisible (*player);
     alone = std::make_unique<AlonePanel> (*this);
     addChildComponent (*alone);
     chat = std::make_unique<ChatPanel> (*this);
@@ -1032,6 +1305,12 @@ void JamScreen::setChatOpen (bool open)
 void JamScreen::toggleChat()
 {
     setChatOpen (! effectiveChatOpen());
+}
+
+void JamScreen::playbackChanged()
+{
+    player->update();
+    resized();
 }
 
 void JamScreen::chatChanged()
@@ -1243,6 +1522,7 @@ void JamScreen::timerCallback()
     lastTickMs = now;
     auto& session = editor.getSession();
     me->pushLevel (session.getMySendLevelDb(), dt, now);
+    player->tick (now);
     for (auto* card : cards)
         card->pushLevel (session.getMemberLevelDb (card->getSlot()), dt);
     if (chatPeek->isVisible() && now - lastPeekRepaintMs > 15000.0)   // "방금 / N분 전" 갱신
@@ -1293,6 +1573,8 @@ void JamScreen::resized()
     }
     const int meH = plugin ? 12 * 2 + 42 : 18 * 2 + 52;
     me->setBounds (main.removeFromTop (meH));
+    main.removeFromTop (gap);
+    player->setBounds (main.removeFromTop (player->preferredHeight()));
     main.removeFromTop (gap);
 
     const bool isAlone = editor.getSession().isAlone();

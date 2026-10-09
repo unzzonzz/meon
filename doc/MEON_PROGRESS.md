@@ -73,8 +73,13 @@ SonoBus 1.7.2(upstream `sonosaurus/sonobus`, 커밋 35f1062d)를 포크한 MEON 
 ### 한 것 (`Source/meon/MeonSession.cpp` `applyProcessorDefaults`)
 - 코덱: **PCM 16 bit** 고정 (새 피어에도 강제 적용). 엔진 코드는 그대로.
 - 지터버퍼: 자동(Auto-Full, 양방향 자동 조절).
-- 이펙트(컴프레서·게이트·EQ·리버브·리미터) 모두 끔. 메트로놈·파일 재생·사운드보드 송출 끔. UI 에서 접근 불가.
-- 녹음·파일 재생: UI 없음.
+- 이펙트(컴프레서·게이트·EQ·리버브·리미터) 모두 끔. 메트로놈·사운드보드 송출 끔. UI 에서 접근 불가.
+- 녹음: UI 없음.
+- 파일 재생 (2026-10-09 숨김 해제): 합주 화면 내 영역 아래 파일 플레이어 (독립 앱·플러그인). SonoBus 엔진의 파일 재생을 그대로 쓰고
+  `sendfileaudio` 를 켠다. MEON 은 송신 채널을 1(모노)/2(스테레오)로 고정하므로 엔진이 파일 소리를 **내 송신에 섞어** 보낸다
+  (채널 수·대역폭은 그대로, 받는 쪽에 따로 표시 없음). 지원 형식은 엔진 그대로: macOS CoreAudio(WAV·AIFF·MP3·M4A/AAC 등) + FLAC·Ogg,
+  Windows WAV·AIFF·FLAC·Ogg + Windows Media(MP3·WMA, OS 코덱이라 라이선스 문제 없음). 방을 나가면 파일을 닫는다.
+  내 뮤트(`mainsendmute`)는 송신 전체를 끄므로 MR 도 함께 안 나간다.
 - 서버: `aoo.sonobus.net:10998` (SonoBus 기본 서버). 서버 끊김 시 엔진의 자동 재접속 사용.
 - 그룹: 항상 비공개(`joinServerGroup(code, "", false)`), 공개 그룹 감시 끔, 공개 목록 UI 없음.
 - 독립 앱 입력: 기본 **입력 1 채널 모노 송출** (첫 실행 입력 레벨 화면에서 채널 변경 가능).
@@ -156,7 +161,9 @@ SonoBus 1.7.2(upstream `sonosaurus/sonobus`, 커밋 35f1062d)를 포크한 MEON 
 - `Source/meon/MeonSessionLog.cpp`. 방에 있는 동안 5초마다 JSON 에 기록:
   멤버별 핑·왕복 지연·지터버퍼(ms)·수신/손실/재전송 패킷·끊김 횟수·연결 상태, 서버 연결 여부·서버 핑, 내 뮤트.
 - 세션 시작·종료 시각과 종료 사유, 독립 앱/플러그인 구분, OS·CPU, 오디오 장치(입력·출력·샘플레이트·버퍼) 또는 호스트 이름.
-- 이벤트: 방 생성/입장, 피어 대기/입장/**P2P(NAT) 연결 실패**/퇴장/끊김/재연결, 서버 끊김/재접속, 나가기, 뮤트.
+- 이벤트: 방 생성/입장, 피어 대기/입장/**P2P(NAT) 연결 실패**/퇴장/끊김/재연결, 서버 끊김/재접속, 나가기, 뮤트,
+  파일 열기/닫기/재생/정지 (`fileLoaded`, `fileClosed`, `filePlay`, `fileStop`).
+- 샘플마다 `fileLoaded`·`filePlaying`·`fileGainDb`, 멤버별 `packetsSent`·`bytesSent`·`sendChannels` (재생 중 업로드 변화와 끊김 비교용).
 - 파일: macOS `~/Library/Logs/MEON/meon-session-YYYYMMDD-HHMMSS.json`, Windows `%APPDATA%\MEON\logs\`. 설정 > 문제 해결 > "로그 폴더 열기" 로만 접근.
 
 ---

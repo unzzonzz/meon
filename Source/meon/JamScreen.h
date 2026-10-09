@@ -38,6 +38,7 @@ public:
 
 private:
     class MyPanel;
+    class FilePlayer;
     class MemberCard;
     class EmptySlot;
     class AlonePanel;
@@ -50,6 +51,7 @@ private:
     const bool plugin;
     MeonButton copyButton, settingsButton, leaveButton;
     std::unique_ptr<MyPanel> me;
+    std::unique_ptr<FilePlayer> player;
     std::unique_ptr<AlonePanel> alone;
     juce::OwnedArray<MemberCard> cards;
     juce::OwnedArray<EmptySlot> empties;
@@ -76,6 +78,7 @@ private:
     void membersChanged() override { rebuildCards(); }
     void memberStatsChanged() override { updateCards(); }
     void chatChanged() override;
+    void playbackChanged() override;
     void sessionStateChanged() override { repaint (topBar); }
     void timerCallback() override;
 };
