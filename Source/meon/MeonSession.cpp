@@ -198,7 +198,7 @@ void MeonSession::applyProcessorDefaults()
     setParam (SonobusAudioProcessor::paramMainInMute, 0.0f);
     setParam (SonobusAudioProcessor::paramMetEnabled, 0.0f);
     setParam (SonobusAudioProcessor::paramSendMetAudio, 0.0f);
-    setParam (SonobusAudioProcessor::paramSendFileAudio, 0.0f);
+    setParam (SonobusAudioProcessor::paramSendFileAudio, 1.0f);   // 파일 재생(MR)은 송신에 섞어 보낸다
     setParam (SonobusAudioProcessor::paramSendSoundboardAudio, 0.0f);
     setParam (SonobusAudioProcessor::paramHearLatencyTest, 0.0f);
     setParam (SonobusAudioProcessor::paramMainSendMute, 0.0f);
@@ -434,6 +434,7 @@ void MeonSession::leaveRoom()
 
 void MeonSession::clearRoom (const juce::String& reason)
 {
+    closePlaybackFile();   // 방을 나가면 MR 도 닫는다 (다음 방에서 바로 소리가 나가지 않게)
     if (log.isActive())
     {
         log.addEvent ("leave", reason);
@@ -594,6 +595,94 @@ void MeonSession::setMyMuted (bool muted)
     if (log.isActive())
         log.addEvent (muted ? "selfMute" : "selfUnmute", "");
     listeners.call ([] (Listener& l) { l.memberStatsChanged(); });
+}
+
+//==============================================================================
+bool MeonSession::loadPlaybackFile (const juce::File& file)
+{
+    if (! processor.loadURLIntoTransport (juce::URL (file)))
+        return false;
+    if (log.isActive())
+        log.addEvent ("fileLoaded", file.getFileName() + " (" + juce::String (getPlaybackLength(), 1) + " s)");
+    listeners.call ([] (Listener& l) { l.playbackChanged(); });
+    return true;
+}
+
+void MeonSession::closePlaybackFile()
+{
+    if (! hasPlaybackFile())
+        return;
+    processor.clearTransportURL();
+    if (log.isActive())
+        log.addEvent ("fileClosed", "");
+    listeners.call ([] (Listener& l) { l.playbackChanged(); });
+}
+
+bool MeonSession::hasPlaybackFile() const
+{
+    return ! processor.getCurrentLoadedTransportURL().isEmpty();
+}
+
+juce::String MeonSession::getPlaybackFileName() const
+{
+    auto url = processor.getCurrentLoadedTransportURL();
+    if (url.isEmpty())
+        return {};
+    return url.isLocalFile() ? url.getLocalFile().getFileName() : url.getFileName();
+}
+
+bool MeonSession::isPlaybackPlaying() const
+{
+    return processor.getTransportSource().isPlaying();
+}
+
+void MeonSession::setPlaybackPlaying (bool play)
+{
+    if (! hasPlaybackFile() || play == isPlaybackPlaying())
+        return;
+    auto& transport = processor.getTransportSource();
+    if (play)
+    {
+        if (transport.getCurrentPosition() >= transport.getLengthInSeconds())
+            transport.setPosition (0.0);
+        transport.start();
+    }
+    else
+    {
+        transport.stop();
+    }
+    if (log.isActive())
+        log.addEvent (play ? "filePlay" : "fileStop", juce::String (getPlaybackPosition(), 1) + " s");
+    listeners.call ([] (Listener& l) { l.playbackChanged(); });
+}
+
+double MeonSession::getPlaybackPosition() const
+{
+    return juce::jmax (0.0, processor.getTransportSource().getCurrentPosition());
+}
+
+double MeonSession::getPlaybackLength() const
+{
+    return hasPlaybackFile() ? juce::jmax (0.0, processor.getTransportSource().getLengthInSeconds()) : 0.0;
+}
+
+void MeonSession::setPlaybackPosition (double seconds)
+{
+    if (hasPlaybackFile())
+        processor.getTransportSource().setPosition (juce::jlimit (0.0, getPlaybackLength(), seconds));
+}
+
+// 볼륨은 엔진(파일 재생 채널 그룹 gain)에만 둔다. 플러그인 창을 다시 열어도 그대로.
+float MeonSession::getPlaybackGainDb() const
+{
+    const float gain = processor.getFilePlaybackGain();
+    return gain <= 0.0f ? playbackMinDb : juce::jlimit (playbackMinDb, playbackMaxDb, juce::Decibels::gainToDecibels (gain));
+}
+
+void MeonSession::setPlaybackGainDb (float db)
+{
+    db = juce::jlimit (playbackMinDb, playbackMaxDb, db);
+    processor.setFilePlaybackGain (db <= playbackMinDb ? 0.0f : juce::Decibels::decibelsToGain (db));
 }
 
 float MeonSession::getMyInputLevelDb (int channel) const
@@ -1024,6 +1113,7 @@ void MeonSession::writeLogSample()
     juce::Array<juce::var> arr;
     for (auto& m : members)
     {
+        const int idx = findPeerIndex (m.userName);
         arr.add (MeonSessionLog::makeObject ({
             { "user", m.userName },
             { "connected", m.connected },
@@ -1036,6 +1126,9 @@ void MeonSession::writeLogSample()
             { "packetsResent", (juce::int64) m.resent },
             { "packetsReceived", (juce::int64) m.received },
             { "dropCount", m.dropCount },
+            { "packetsSent", idx >= 0 ? (juce::int64) processor.getRemotePeerPacketsSent (idx) : (juce::int64) 0 },
+            { "bytesSent", idx >= 0 ? (juce::int64) processor.getRemotePeerBytesSent (idx) : (juce::int64) 0 },
+            { "sendChannels", idx >= 0 ? processor.getRemotePeerActualSendChannelCount (idx) : 0 },
             { "gain", m.gain },
             { "mutedByMe", m.muted } }));
     }
@@ -1044,6 +1137,10 @@ void MeonSession::writeLogSample()
         { "serverConnected", serverState == ServerState::Connected },
         { "serverPingMs", getServerPingMs() },
         { "selfMuted", isMyMuted() },
+        // 파일 재생(MR): 재생 중이면 그 소리도 송신에 섞인다 (송신 채널 수는 그대로)
+        { "fileLoaded", hasPlaybackFile() },
+        { "filePlaying", isPlaybackPlaying() },
+        { "fileGainDb", getPlaybackGainDb() },
         { "memberCount", getMemberCount() },
         { "members", arr } }));
 }

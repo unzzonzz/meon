@@ -64,6 +64,7 @@ public:
         virtual void roomJoined() {}
         virtual void roomLeft() {}
         virtual void joinFailed (JoinFailure) {}
+        virtual void playbackChanged() {}       // 파일 열기·닫기, 재생·정지 (위치는 화면이 주기적으로 읽는다)
     };
 
     MeonSession (SonobusAudioProcessor& processor, MeonSettings& settings, bool isPlugin);
@@ -118,6 +119,22 @@ public:
     Part getMyPart() const;                  // 설정의 파트 (고른 적 없으면 None)
     juce::String getUserName() const { return userName; }
     void setInputChannels (int start, int count);      // 독립 앱 전용
+
+    //==============================================================================
+    // 파일 재생 (MR). SonoBus 엔진의 파일 재생을 그대로 쓴다: 소리는 내 송신에 섞여 나가고 나도 듣는다.
+    // 상태는 엔진에 있으므로 플러그인 창을 다시 열어도 이어진다.
+    bool loadPlaybackFile (const juce::File& file);    // 실패하면 false (지원하지 않는 형식 등)
+    void closePlaybackFile();
+    bool hasPlaybackFile() const;
+    juce::String getPlaybackFileName() const;
+    bool isPlaybackPlaying() const;
+    void setPlaybackPlaying (bool play);               // 정지는 위치 유지. 끝나면 엔진이 처음으로 되돌린다
+    double getPlaybackPosition() const;                // 초
+    double getPlaybackLength() const;                  // 초
+    void setPlaybackPosition (double seconds);
+    float getPlaybackGainDb() const;
+    void setPlaybackGainDb (float db);                 // playbackMinDb 이하는 소리 없음 (-∞)
+    static constexpr float playbackMinDb = -30.0f, playbackMaxDb = 10.0f;
 
     //==============================================================================
     // 채팅
