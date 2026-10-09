@@ -6,6 +6,109 @@ namespace meon
 static const char* kCodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // 혼동 문자(O,0,I,1) 제외
 
 //==============================================================================
+// 파일 재생 위치를 옮기거나 재생을 시작할 때 소리가 튀지 않게 한다.
+// AudioTransportSource 의 gain 은 엔진이 쓰지 않으므로(엔진은 채널 그룹 gain 을 쓴다) 여기서 페이드용으로 쓴다.
+// 5 ms 마다 gain 을 조금씩 바꾸고, 엔진은 바뀔 때마다 그 블록 안에서 램프한다.
+// 위치 이동: 약 35 ms 에 걸쳐 줄임 → 위치 이동 → 80 ms 기다림(읽기 버퍼가 차는 시간) → 약 50 ms 에 걸쳐 키움.
+class PlaybackFader : private juce::Timer
+{
+public:
+    explicit PlaybackFader (juce::AudioTransportSource& t) : transport (t) {}
+    ~PlaybackFader() override { finish(); }
+
+    void seek (double seconds)
+    {
+        if (! transport.isPlaying())
+        {
+            finish();
+            transport.setPosition (seconds);
+            return;
+        }
+        pendingSeek = true;
+        target = seconds;
+        desired = 0.0f;
+        holdTicks = 0;
+        startTimer (tickMs);
+    }
+
+    /** 0 에서 시작해서 버퍼가 찬 뒤 키운다 */
+    void start()
+    {
+        finish();
+        setGain (0.0f);
+        transport.start();
+        desired = 0.0f;
+        holdTicks = 80 / tickMs;
+        startTimer (tickMs);
+    }
+
+    /** 남은 위치 이동은 바로 적용하고 소리를 원래대로 */
+    void finish()
+    {
+        stopTimer();
+        if (pendingSeek)
+            transport.setPosition (target);
+        pendingSeek = false;
+        holdTicks = 0;
+        desired = 1.0f;
+        setGain (1.0f);
+    }
+
+    bool hasPendingSeek (double& seconds) const
+    {
+        if (! pendingSeek)
+            return false;
+        seconds = target;
+        return true;
+    }
+
+private:
+    static constexpr int tickMs = 5;
+    juce::AudioTransportSource& transport;
+    bool pendingSeek = false;
+    double target = 0.0;
+    float current = 1.0f, desired = 1.0f;
+    int holdTicks = 0, silentTicks = 0;
+
+    void setGain (float g)
+    {
+        current = g;
+        transport.setGain (g);
+    }
+
+    void timerCallback() override
+    {
+        if (current > desired)
+        {
+            setGain (juce::jmax (desired, current - 0.15f));
+            silentTicks = 0;
+            return;
+        }
+        if (pendingSeek)
+        {
+            if (++silentTicks < 2)   // 0 이 된 블록이 실제로 나간 뒤에 옮긴다
+                return;
+            transport.setPosition (target);
+            pendingSeek = false;
+            holdTicks = 80 / tickMs;
+            return;
+        }
+        if (holdTicks > 0)
+        {
+            if (--holdTicks == 0)
+                desired = 1.0f;
+            return;
+        }
+        if (current < desired)
+        {
+            setGain (juce::jmin (desired, current + 0.1f));
+            return;
+        }
+        stopTimer();
+    }
+};
+
+//==============================================================================
 /** 서버까지의 왕복 시간을 TCP 접속 시간으로 어림한다 (참고용). */
 class ServerPinger : public juce::Thread
 {
@@ -67,12 +170,14 @@ MeonSession::MeonSession (SonobusAudioProcessor& p, MeonSettings& s, bool plugin
             reattached = true;
         }
     }
+    fader = std::make_unique<PlaybackFader> (processor.getTransportSource());
     startTimer (200);
 }
 
 MeonSession::~MeonSession()
 {
     stopTimer();
+    fader = nullptr;   // 줄여 둔 소리가 있으면 원래대로 (플러그인은 창을 닫아도 재생이 이어진다)
     processor.removeClientListener (this);
     cancelPendingUpdate();
     if (roomState != RoomState::None)
@@ -598,10 +703,45 @@ void MeonSession::setMyMuted (bool muted)
 }
 
 //==============================================================================
+// 한글 자모 조합 (유니코드 표준 알고리즘): 초성 U+1100..1112 + 중성 U+1161..1175 [+ 종성 U+11A8..11C2] → U+AC00..D7A3.
+// 완성형 음절 + 종성도 합친다. 그 밖의 글자는 그대로.
+juce::String MeonSession::composeHangul (const juce::String& text)
+{
+    constexpr juce::juce_wchar sBase = 0xAC00, lBase = 0x1100, vBase = 0x1161, tBase = 0x11A7;
+    constexpr int lCount = 19, vCount = 21, tCount = 28, nCount = vCount * tCount, sCount = lCount * nCount;
+    juce::Array<juce::juce_wchar> out;
+    for (auto p = text.getCharPointer(); ! p.isEmpty();)
+    {
+        const juce::juce_wchar c = p.getAndAdvance();
+        if (! out.isEmpty())
+        {
+            const juce::juce_wchar last = out.getLast();
+            const int l = (int) (last - lBase), v = (int) (c - vBase);
+            if (l >= 0 && l < lCount && v >= 0 && v < vCount)
+            {
+                out.set (out.size() - 1, (juce::juce_wchar) (sBase + (l * vCount + v) * tCount));
+                continue;
+            }
+            const int si = (int) (last - sBase), t = (int) (c - tBase);
+            if (si >= 0 && si < sCount && si % tCount == 0 && t > 0 && t < tCount)
+            {
+                out.set (out.size() - 1, last + (juce::juce_wchar) t);
+                continue;
+            }
+        }
+        out.add (c);
+    }
+    out.add (0);
+    return juce::String (juce::CharPointer_UTF32 ((const juce::CharPointer_UTF32::CharType*) out.getRawDataPointer()));
+}
+
+//==============================================================================
 bool MeonSession::loadPlaybackFile (const juce::File& file)
 {
+    fader->finish();
     if (! processor.loadURLIntoTransport (juce::URL (file)))
         return false;
+    playbackFile = file;
     if (log.isActive())
         log.addEvent ("fileLoaded", file.getFileName() + " (" + juce::String (getPlaybackLength(), 1) + " s)");
     listeners.call ([] (Listener& l) { l.playbackChanged(); });
@@ -612,7 +752,9 @@ void MeonSession::closePlaybackFile()
 {
     if (! hasPlaybackFile())
         return;
+    fader->finish();
     processor.clearTransportURL();
+    playbackFile = juce::File();
     if (log.isActive())
         log.addEvent ("fileClosed", "");
     listeners.call ([] (Listener& l) { l.playbackChanged(); });
@@ -628,7 +770,12 @@ juce::String MeonSession::getPlaybackFileName() const
     auto url = processor.getCurrentLoadedTransportURL();
     if (url.isEmpty())
         return {};
-    return url.isLocalFile() ? url.getLocalFile().getFileName() : url.getFileName();
+    juce::String name;
+    if (playbackFile != juce::File() && url == juce::URL (playbackFile))
+        name = playbackFile.getFileName();
+    else
+        name = url.isLocalFile() ? url.getLocalFile().getFileName() : juce::URL::removeEscapeChars (url.getFileName());
+    return composeHangul (name);
 }
 
 bool MeonSession::isPlaybackPlaying() const
@@ -645,11 +792,12 @@ void MeonSession::setPlaybackPlaying (bool play)
     {
         if (transport.getCurrentPosition() >= transport.getLengthInSeconds())
             transport.setPosition (0.0);
-        transport.start();
+        fader->start();
     }
     else
     {
-        transport.stop();
+        fader->finish();
+        transport.stop();   // 엔진 쪽에서 마지막 블록을 짧게 줄여 끝낸다
     }
     if (log.isActive())
         log.addEvent (play ? "filePlay" : "fileStop", juce::String (getPlaybackPosition(), 1) + " s");
@@ -658,6 +806,9 @@ void MeonSession::setPlaybackPlaying (bool play)
 
 double MeonSession::getPlaybackPosition() const
 {
+    double pending = 0.0;
+    if (fader->hasPendingSeek (pending))
+        return pending;
     return juce::jmax (0.0, processor.getTransportSource().getCurrentPosition());
 }
 
@@ -669,7 +820,7 @@ double MeonSession::getPlaybackLength() const
 void MeonSession::setPlaybackPosition (double seconds)
 {
     if (hasPlaybackFile())
-        processor.getTransportSource().setPosition (juce::jlimit (0.0, getPlaybackLength(), seconds));
+        fader->seek (juce::jlimit (0.0, getPlaybackLength(), seconds));
 }
 
 // 볼륨은 엔진(파일 재생 채널 그룹 gain)에만 둔다. 플러그인 창을 다시 열어도 그대로.

@@ -240,15 +240,10 @@ public:
             session().setPlaybackGainDb ((float) volume.getValue());
             repaint (volTextArea);
         };
+        // 위치 바: 끄는 동안은 시간 표시만 바꾸고, 손을 뗄 때 한 번만 옮긴다 (계속 옮기면 지직거림)
         seek.setRange (0.0, 1.0, 0.0);
-        seek.onValueChange = [this]
-        {
-            if (! syncing)
-            {
-                session().setPlaybackPosition (seek.getValue());
-                repaint (curArea);
-            }
-        };
+        seek.onValueChange = [this] { if (! syncing) repaint (curArea); };
+        seek.onDragEnd = [this] { session().setPlaybackPosition (seek.getValue()); repaint (curArea); };
 
         addAndMakeVisible (openButton);
         addChildComponent (closeButton);

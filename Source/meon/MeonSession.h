@@ -13,6 +13,7 @@ namespace meon
 {
 
 class ServerPinger;
+class PlaybackFader;
 
 class MeonSession : private juce::AsyncUpdater,
                     private juce::Timer,
@@ -131,7 +132,7 @@ public:
     void setPlaybackPlaying (bool play);               // 정지는 위치 유지. 끝나면 엔진이 처음으로 되돌린다
     double getPlaybackPosition() const;                // 초
     double getPlaybackLength() const;                  // 초
-    void setPlaybackPosition (double seconds);
+    void setPlaybackPosition (double seconds);         // 재생 중이면 짧게 줄였다가 옮기고 다시 키운다 (튀는 소리 방지)
     float getPlaybackGainDb() const;
     void setPlaybackGainDb (float db);                 // playbackMinDb 이하는 소리 없음 (-∞)
     static constexpr float playbackMinDb = -30.0f, playbackMaxDb = 10.0f;
@@ -147,6 +148,9 @@ public:
     // 로그
     MeonSessionLog& getLog() { return log; }
     void setAudioInfoProvider (std::function<MeonSessionLog::AudioInfo()> f) { audioInfoProvider = std::move (f); }
+
+    /** 자모가 나뉜 한글(NFD, macOS 파일 이름)을 완성형 글자로 합친다 */
+    static juce::String composeHangul (const juce::String& text);
 
     static juce::String generateRoomCode();
     static juce::String displayNameFor (const juce::String& userName);
@@ -173,6 +177,8 @@ private:
     MeonSessionLog log;
     std::function<MeonSessionLog::AudioInfo()> audioInfoProvider;
     std::unique_ptr<ServerPinger> pinger;
+    std::unique_ptr<PlaybackFader> fader;
+    juce::File playbackFile;   // 이 세션에서 연 파일 (엔진 URL 과 같을 때 이름은 여기서)
 
     juce::CriticalSection eventLock;
     std::vector<Event> pendingEvents;
