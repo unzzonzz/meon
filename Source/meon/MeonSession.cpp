@@ -237,7 +237,30 @@ void MeonSession::applyPeerDefaults (int peerIndex, Member& m)
     processor.setRemotePeerAutoresizeBufferMode (peerIndex, SonobusAudioProcessor::AutoNetBufferModeAutoFull);
     if (auto* src = processor.getRemotePeerRecvMeterSource (peerIndex))
         src->setMaxHoldMS (100);
+    applyPeerPan (peerIndex, m.pan, false);
     m.defaultsApplied = true;
+}
+
+// 엔진의 채널 그룹 패닝을 쓴다 (엔진 고유 팬 법칙: 가운데 -4.5 dB). 모노는 위치 하나, 스테레오는 L/R 위치를 함께 민다.
+// 상대 스트림의 채널 수가 바뀌면 엔진이 패닝을 다시 잡을 수 있어 refreshStats 에서 어긋나면 다시 넣는다.
+void MeonSession::applyPeerPan (int peerIndex, int pan, bool onlyIfChanged)
+{
+    const float p = juce::jlimit (-1.0f, 1.0f, (float) pan / 100.0f);
+    const int groups = processor.getRemotePeerChannelGroupCount (peerIndex);
+    for (int g = 0; g < groups; ++g)
+    {
+        int start = 0, count = 0;
+        if (! processor.getRemotePeerChannelGroupStartAndCount (peerIndex, g, start, count))
+            continue;
+        const bool stereo = count == 2;
+        for (int c = 0; c < count; ++c)
+        {
+            const float want = stereo ? juce::jlimit (-1.0f, 1.0f, (c == 0 ? -1.0f : 1.0f) + 2.0f * p) : p;
+            if (onlyIfChanged && std::abs (processor.getRemotePeerChannelPan (peerIndex, g, c) - want) < 0.0001f)
+                continue;
+            processor.setRemotePeerChannelPan (peerIndex, g, c, want);
+        }
+    }
 }
 
 //==============================================================================
@@ -250,7 +273,7 @@ void MeonSession::start()
             audio = audioInfoProvider();
         log.begin (roomCode, userName, isPlugin, audio);
         log.addEvent ("editorReopened", roomCode);
-        reconcilePeers();
+        reconcilePeers (true);
         listeners.call ([] (Listener& l) { l.sessionStateChanged(); l.membersChanged(); });
     }
     if (settings.getNickname().trim().isEmpty())
@@ -495,6 +518,33 @@ void MeonSession::setMemberGain (int slot, float gain)
         if (idx >= 0)
             processor.setRemotePeerLevelGain (idx, gain);
         m->gain = gain;
+    }
+}
+
+int MeonSession::readPeerPan (int peerIndex) const
+{
+    int start = 0, count = 0;
+    if (processor.getRemotePeerChannelGroupCount (peerIndex) < 1
+        || ! processor.getRemotePeerChannelGroupStartAndCount (peerIndex, 0, start, count))
+        return 0;
+    float p = processor.getRemotePeerChannelPan (peerIndex, 0, 0);
+    if (count == 2)
+    {
+        // applyPeerPan 의 역: L = -1 + 2p (p > 0), R = 1 + 2p (p < 0)
+        const float r = processor.getRemotePeerChannelPan (peerIndex, 0, 1);
+        p = p > -1.0f + 0.0001f ? (p + 1.0f) * 0.5f : (r - 1.0f) * 0.5f;
+    }
+    return juce::jlimit (-100, 100, (int) std::lround (p * 100.0f));
+}
+
+void MeonSession::setMemberPan (int slot, int pan)
+{
+    if (auto* m = const_cast<Member*> (getMemberInSlot (slot)))
+    {
+        m->pan = juce::jlimit (-100, 100, pan);
+        const int idx = findPeerIndex (m->userName);
+        if (idx >= 0)
+            applyPeerPan (idx, m->pan, false);
     }
 }
 
@@ -881,7 +931,7 @@ void MeonSession::timerCallback()
     }
 }
 
-void MeonSession::reconcilePeers()
+void MeonSession::reconcilePeers (bool adoptEnginePan)
 {
     const double now = juce::Time::getMillisecondCounterHiRes();
     bool changed = false;
@@ -901,6 +951,8 @@ void MeonSession::reconcilePeers()
         nm.pending = false;
         nm.connected = processor.getRemotePeerConnected (i);
         nm.joinedAtMs = now;
+        if (adoptEnginePan)
+            nm.pan = readPeerPan (i);
         members.push_back (nm);
         applyPeerDefaults (i, members.back());
         changed = true;
@@ -959,6 +1011,7 @@ void MeonSession::refreshStats()
         m.resent = processor.getRemotePeerPacketsResent (idx);
         m.received = processor.getRemotePeerPacketsReceived (idx);
         m.gain = processor.getRemotePeerLevelGain (idx);
+        applyPeerPan (idx, m.pan, true);
         m.hasStats = true;
     }
     listeners.call ([] (Listener& l) { l.memberStatsChanged(); });

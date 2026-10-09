@@ -42,6 +42,9 @@ public:
     void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
                            float sliderPos, float minSliderPos, float maxSliderPos,
                            const juce::Slider::SliderStyle, juce::Slider&) override;
+    // 노브 (패닝)
+    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
+                           float sliderPosProportional, float rotaryStartAngle, float rotaryEndAngle, juce::Slider&) override;
     int getSliderThumbRadius (juce::Slider& s) override { return (int) s.getProperties().getWithDefault ("meonThumb", 16) / 2; }
 
     // 스크롤바

@@ -113,6 +113,28 @@ public:
 };
 
 //==============================================================================
+/** 패닝 노브. -100(왼쪽)..0..100(오른쪽) 정수, 회전 값 × 1.35° (±135°).
+    세로 드래그 1px = 1 (Shift 0.25배), |값| < 3 이면 0 에 붙음, 더블클릭 0, 휠 한 칸 ±1.
+    그리기는 MeonLookAndFeel::drawRotarySlider (지름은 "meonKnob" 속성). */
+class PanKnob : public juce::Slider
+{
+public:
+    explicit PanKnob (int diameter);
+
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    void enablementChanged() override;
+
+private:
+    double dragRaw = 0.0;
+    float lastY = 0.0f, wheelAcc = 0.0f;
+    bool dragging = false;
+};
+
+//==============================================================================
 /** 체크박스 26×26 (모서리 5). 켜짐은 #FFD700 채움 + 검정 체크. */
 class MeonCheckbox : public juce::Button
 {
