@@ -1,8 +1,80 @@
 #include "JamScreen.h"
 #include "MeonParts.h"
+#include "MeonEmoji.h"
 
 namespace meon
 {
+
+//==============================================================================
+/** 채팅 글 속 링크 (http://, https://, www. 로 시작해서 공백·이모지 전까지). 끝의 문장부호는 뺀다. */
+static TextRanges findLinks (const juce::String& text)
+{
+    TextRanges links;
+    const int n = text.length();
+    auto startsWith = [&text] (int i, const char* prefix)
+    {
+        return text.substring (i, i + (int) std::strlen (prefix)).equalsIgnoreCase (prefix);
+    };
+
+    for (int i = 0; i < n;)
+    {
+        int prefix = 0;
+        if (startsWith (i, "https://"))     prefix = 8;
+        else if (startsWith (i, "http://")) prefix = 7;
+        else if (startsWith (i, "www.") && (i == 0 || ! (juce::CharacterFunctions::isLetterOrDigit (text[i - 1]) || text[i - 1] == '.' || text[i - 1] == '/')))
+            prefix = 4;
+        if (prefix == 0)
+        {
+            ++i;
+            continue;
+        }
+
+        int end = i + prefix;
+        while (end < n && ! juce::CharacterFunctions::isWhitespace (text[end])
+               && text[end] != '<' && text[end] != '>' && text[end] != '"' && emoji::clusterEnd (text, end) == end)
+            ++end;
+
+        // 끝에 붙은 문장부호 ("…봐요 https://a.com." 의 마침표 등). 괄호는 짝이 안 맞을 때만 뺀다.
+        const juce::String trailing (TXT (".,!?;:'\")]}…"));
+        while (end > i + prefix && trailing.containsChar (text[end - 1]))
+        {
+            if (text[end - 1] == ')')
+            {
+                const auto body = text.substring (i, end);
+                if (body.retainCharacters ("(").length() >= body.retainCharacters (")").length())
+                    break;
+            }
+            --end;
+        }
+
+        const auto rest = text.substring (i + prefix, end);
+        if (rest.isNotEmpty() && (prefix != 4 || rest.containsChar ('.')))
+            links.push_back ({ i, end });
+        i = juce::jmax (end, i + 1);
+    }
+    return links;
+}
+
+/** 브라우저에 넘길 주소. www. 는 https:// 를 붙이고, 한글 등은 퍼센트 인코딩한다 (macOS 는 ASCII 주소만 연다). */
+static juce::String browserUrl (const juce::String& link)
+{
+    const auto full = link.startsWithIgnoreCase ("www.") ? "https://" + link : link;
+    const juce::String safe ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~:/?#[]@!$&'()*+,;=%");
+    juce::String out;
+    for (auto p = full.getCharPointer(); ! p.isEmpty();)
+    {
+        const auto c = p.getAndAdvance();
+        if (c < 0x80 && safe.containsChar (c))
+        {
+            out += juce::String::charToString (c);
+            continue;
+        }
+        const auto ch = juce::String::charToString (c);
+        for (auto* b = ch.toRawUTF8(); *b != 0; ++b)
+            out += "%" + juce::String::toHexString ((int) (juce::uint8) *b).paddedLeft ('0', 2).toUpperCase();
+    }
+    return out;
+}
 
 //==============================================================================
 juce::String JamScreen::koreanTime (const juce::Time& t)
@@ -527,34 +599,91 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            const int pad = plugin ? 12 : 16, gap = plugin ? 11 : 14;
-            const int width = getWidth() - pad * 2;
-            auto& chat = owner.getEditor().getSession().getChat();
-            int y = pad;
-            for (auto& m : chat)
+            forEachItem ([&] (const MeonSession::ChatMessage& m, juce::Rectangle<int> item)
             {
-                const int h = itemHeight (m, width);
                 if (m.kind == MeonSession::ChatMessage::System)
                 {
                     drawLineWithEmoji (g, koreanTime (m.time) + TXT (" · ") + m.text, Fonts::get (400, plugin ? 11.0f : 12.0f), col::disabled,
-                                       juce::Rectangle<int> (pad, y, width, h).toFloat(), juce::Justification::centred);
+                                       item.toFloat(), juce::Justification::centred);
+                    return false;
                 }
-                else
-                {
-                    const bool mine = m.kind == MeonSession::ChatMessage::Mine;
-                    const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
-                    drawLineWithEmoji (g, mine ? TXT ("나") : m.from, Fonts::get (600, plugin ? 12.0f : 13.0f), col::inkSub,
-                                       juce::Rectangle<int> (pad, y, width, nameH).toFloat(), mine ? juce::Justification::centredRight : juce::Justification::centredLeft);
-                    const float msgPx = plugin ? 13.0f : 15.0f;
-                    drawParagraphWithEmoji (g, m.text, Fonts::get (400, msgPx), col::ink,
-                                            juce::Rectangle<float> ((float) pad, (float) (y + nameH + (plugin ? 2 : 3)), (float) width, (float) (h - nameH)),
-                                            msgPx * 1.5f, mine ? juce::Justification::topRight : juce::Justification::topLeft);
-                }
-                y += h + gap;
+                const bool mine = m.kind == MeonSession::ChatMessage::Mine;
+                const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
+                drawLineWithEmoji (g, mine ? TXT ("나") : m.from, Fonts::get (600, plugin ? 12.0f : 13.0f), col::inkSub,
+                                   item.withHeight (nameH).toFloat(), mine ? juce::Justification::centredRight : juce::Justification::centredLeft);
+                const float msgPx = plugin ? 13.0f : 15.0f;
+                drawParagraphWithEmoji (g, m.text, Fonts::get (400, msgPx), col::ink, textArea (m, item), msgPx * 1.5f, textJustification (m),
+                                        findLinks (m.text), col::inkSub);   // 링크 글자색은 inkSub (디자인 토큰)
+                return false;
+            });
+        }
+
+        void mouseMove (const juce::MouseEvent& e) override
+        {
+            setMouseCursor (linkAt (e.position).isNotEmpty() ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        }
+
+        void mouseExit (const juce::MouseEvent&) override { setMouseCursor (juce::MouseCursor::NormalCursor); }
+
+        void mouseUp (const juce::MouseEvent& e) override
+        {
+            if (e.mouseWasDraggedSinceMouseDown() || e.mods.isPopupMenu())
+                return;
+            if (auto link = linkAt (e.position); link.isNotEmpty())
+            {
+                setMouseCursor (juce::MouseCursor::NormalCursor);
+                owner.requestOpenLink (link);
             }
         }
 
     private:
+        /** 메시지마다 fn (메시지, 그 메시지 영역) 을 부른다. fn 이 true 를 돌려주면 멈춘다. */
+        template <typename Fn>
+        void forEachItem (Fn&& fn) const
+        {
+            const int pad = plugin ? 12 : 16, gap = plugin ? 11 : 14;
+            const int width = getWidth() - pad * 2;
+            int y = pad;
+            for (auto& m : owner.getEditor().getSession().getChat())
+            {
+                const int h = itemHeight (m, width);
+                if (fn (m, juce::Rectangle<int> (pad, y, width, h)))
+                    return;
+                y += h + gap;
+            }
+        }
+
+        juce::Rectangle<float> textArea (const MeonSession::ChatMessage&, juce::Rectangle<int> item) const
+        {
+            const int nameH = (int) std::ceil (Fonts::get (600, plugin ? 12.0f : 13.0f).getHeight());
+            return juce::Rectangle<float> ((float) item.getX(), (float) (item.getY() + nameH + (plugin ? 2 : 3)), (float) item.getWidth(), (float) (item.getHeight() - nameH));
+        }
+
+        static juce::Justification textJustification (const MeonSession::ChatMessage& m)
+        {
+            return m.kind == MeonSession::ChatMessage::Mine ? juce::Justification::topRight : juce::Justification::topLeft;
+        }
+
+        /** p 위에 있는 링크 글 (없으면 빈 문자열) */
+        juce::String linkAt (juce::Point<float> p) const
+        {
+            juce::String found;
+            forEachItem ([&] (const MeonSession::ChatMessage& m, juce::Rectangle<int> item)
+            {
+                if (item.getY() > p.y)
+                    return true;
+                if (m.kind == MeonSession::ChatMessage::System || ! item.toFloat().contains (p))
+                    return false;
+                const auto links = findLinks (m.text);
+                const float msgPx = plugin ? 13.0f : 15.0f;
+                const int k = hitTestParagraphLink (m.text, Fonts::get (400, msgPx), textArea (m, item), msgPx * 1.5f, textJustification (m), links, p);
+                if (k >= 0)
+                    found = m.text.substring (links[(size_t) k].getStart(), links[(size_t) k].getEnd());
+                return true;
+            });
+            return found;
+        }
+
         JamScreen& owner;
         const bool plugin;
     };
@@ -727,6 +856,77 @@ private:
 };
 
 //==============================================================================
+/** 채팅 링크를 누르면 나오는 확인 창. 열기를 누르면 기본 브라우저로 연다. */
+class JamScreen::LinkDialog : public juce::Component
+{
+public:
+    LinkDialog (JamScreen& o, const juce::String& linkText)
+        : owner (o), plugin (o.isPlugin()), link (linkText),
+          cancelButton (TXT ("취소")), openButton (TXT ("열기"), MeonButton::Style::Primary)
+    {
+        // 너무 긴 주소는 앞부분만 보인다 (여는 주소는 그대로)
+        shown = link.length() > 300 ? link.substring (0, 300) + juce::String::charToString ((juce::juce_wchar) 0x2026) : link;
+        cancelButton.setFont (plugin ? 15.0f : 16.0f, 500);
+        openButton.setFont (plugin ? 15.0f : 16.0f, 600);
+        cancelButton.onClick = [this] { owner.cancelLink(); };
+        openButton.onClick = [this] { owner.openLink(); };
+        addAndMakeVisible (cancelButton);
+        addAndMakeVisible (openButton);
+        setWantsKeyboardFocus (false);
+    }
+
+    const juce::String& getLink() const { return link; }
+
+    void mouseDown (const juce::MouseEvent&) override {}   // 뒤 화면 클릭 막기
+
+    void resized() override
+    {
+        const int w = juce::jmin (plugin ? 380 : 460, getWidth() - 32), padX = plugin ? 24 : 30, padY = plugin ? 22 : 28;
+        const float titlePx = plugin ? 19.0f : 22.0f;
+        const int titleH = (int) std::ceil (Fonts::get (700, titlePx).getHeight());
+        const int btnH = plugin ? 40 : 44;
+        const int h = padY * 2 + titleH + (plugin ? 10 : 12) + bodyHeight (w - padX * 2) + (plugin ? 10 : 12) + (plugin ? 8 : 12) + btnH;
+        card = juce::Rectangle<int> (getWidth() / 2 - w / 2, getHeight() / 2 - h / 2, w, h);
+        const int openW = openButton.getIdealWidth (plugin ? 18 : 22), cancelW = cancelButton.getIdealWidth (plugin ? 18 : 22);
+        const int by = card.getBottom() - padY - btnH;
+        openButton.setBounds (card.getRight() - padX - openW, by, openW, btnH);
+        cancelButton.setBounds (openButton.getX() - (plugin ? 8 : 10) - cancelW, by, cancelW, btnH);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const int padX = plugin ? 24 : 30, padY = plugin ? 22 : 28;
+        const float titlePx = plugin ? 19.0f : 22.0f, bodyPx = plugin ? 14.0f : 15.0f;
+        g.fillAll (col::ink.withAlpha (0.25f));   // 나가기 확인 창과 같은 스크림
+        g.setColour (col::white);
+        g.fillRoundedRectangle (card.toFloat(), (float) metric::radiusWindow);
+        g.setColour (col::ink);
+
+        const int titleH = (int) std::ceil (Fonts::get (700, titlePx).getHeight());
+        g.setFont (Fonts::get (700, titlePx));
+        g.drawText (TXT ("링크를 열까요"), juce::Rectangle<int> (card.getX() + padX, card.getY() + padY, card.getWidth() - padX * 2, titleH), juce::Justification::centredLeft, false);
+        const float bodyW = (float) (card.getWidth() - padX * 2);
+        drawParagraphWithEmoji (g, shown, Fonts::get (400, bodyPx), col::inkSub,
+                                juce::Rectangle<float> ((float) (card.getX() + padX), (float) (card.getY() + padY + titleH + (plugin ? 10 : 12)), bodyW, (float) bodyHeight ((int) bodyW)),
+                                bodyPx * 1.6f);
+    }
+
+private:
+    int bodyHeight (int width) const
+    {
+        const float bodyPx = plugin ? 14.0f : 15.0f;
+        return (int) std::ceil (paragraphHeightWithEmoji (shown, Fonts::get (400, bodyPx), (float) width, bodyPx * 1.6f));
+    }
+
+    JamScreen& owner;
+    const bool plugin;
+    const juce::String link;
+    juce::String shown;
+    MeonButton cancelButton, openButton;
+    juce::Rectangle<int> card;
+};
+
+//==============================================================================
 JamScreen::JamScreen (MeonEditor& e)
     : editor (e), plugin (e.isPluginMode()),
       copyButton (TXT ("복사")), settingsButton (TXT ("설정")), leaveButton (plugin ? TXT ("나가기") : TXT ("방 나가기"))
@@ -839,7 +1039,37 @@ void JamScreen::requestLeave()
 {
     if (leaveDialog != nullptr)
         return;
+    cancelLink();
     showLeaveDialog (false);
+}
+
+void JamScreen::requestOpenLink (const juce::String& link)
+{
+    if (leaveDialog != nullptr || linkDialog != nullptr)
+        return;
+    linkDialog = std::make_unique<LinkDialog> (*this, link);
+    addAndMakeVisible (*linkDialog);
+    linkDialog->setBounds (getLocalBounds());
+    linkDialog->toFront (false);
+    editor.grabKeyboardFocus();   // Esc·Enter 를 handleShortcut 이 받도록
+}
+
+void JamScreen::cancelLink()
+{
+    if (linkDialog != nullptr)
+    {
+        linkDialog->setVisible (false);
+        dialogTrash = std::move (linkDialog);
+    }
+}
+
+void JamScreen::openLink()
+{
+    if (linkDialog == nullptr)
+        return;
+    const auto url = browserUrl (linkDialog->getLink());
+    cancelLink();
+    juce::URL (url).launchInDefaultBrowser();
 }
 
 void JamScreen::showLeaveDialog (bool quit)
@@ -891,6 +1121,12 @@ bool JamScreen::confirmLeaveForQuit()
 bool JamScreen::handleShortcut (const juce::KeyPress& k)
 {
     auto& session = editor.getSession();
+    if (linkDialog != nullptr)
+    {
+        if (k == juce::KeyPress::escapeKey) cancelLink();
+        else if (k == juce::KeyPress::returnKey) openLink();
+        return true;   // 확인 창이 떠 있는 동안 다른 단축키는 막는다
+    }
     if (k == juce::KeyPress::escapeKey)
     {
         if (leaveDialog != nullptr) cancelLeave();
@@ -1050,6 +1286,8 @@ void JamScreen::resized()
 
     if (leaveDialog != nullptr)
         leaveDialog->setBounds (getLocalBounds());
+    if (linkDialog != nullptr)
+        linkDialog->setBounds (getLocalBounds());
 }
 
 bool JamScreen::serverTextHidden() const
