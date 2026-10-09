@@ -42,6 +42,8 @@ public:
     void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
                            float sliderPos, float minSliderPos, float maxSliderPos,
                            const juce::Slider::SliderStyle, juce::Slider&) override;
+    static juce::Colour controlBorder (bool enabled);
+
     // 노브 (패닝)
     void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
                            float sliderPosProportional, float rotaryStartAngle, float rotaryEndAngle, juce::Slider&) override;

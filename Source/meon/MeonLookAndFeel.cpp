@@ -235,6 +235,13 @@ juce::CaretComponent* MeonLookAndFeel::createCaretComponent (juce::Component* ke
 }
 
 //==============================================================================
+// 노브·슬라이더 손잡이 테두리. 뮤트 버튼(Secondary) 테두리와 같은 색: 평소 #D5D5D5, 비활성(끊김) #E0E0E0
+juce::Colour MeonLookAndFeel::controlBorder (bool enabled)
+{
+    return enabled ? col::border : col::cardBorder;
+}
+
+//==============================================================================
 void MeonLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
                                         float sliderPos, float /*minSliderPos*/, float /*maxSliderPos*/,
                                         const juce::Slider::SliderStyle style, juce::Slider& slider)
@@ -261,12 +268,12 @@ void MeonLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int wid
     g.setColour (enabled ? col::accent : col::border);
     g.fillRoundedRectangle (juce::Rectangle<float> (trackX, cy - 2.0f, pos - trackX, 4.0f), 2.0f);
 
-    // 핸들 16×16 정사각 (모서리 3)
+    // 손잡이: 흰 원 (앱 16, 플러그인 14) + 1px 테두리 (패닝 노브와 같은 색)
     juce::Rectangle<float> handle (pos - thumb * 0.5f, cy - thumb * 0.5f, thumb, thumb);
     g.setColour (col::white);
-    g.fillRoundedRectangle (handle, 3.0f);
-    g.setColour (enabled ? col::inkSub : col::border);
-    g.drawRoundedRectangle (handle.reduced (0.5f), 3.0f, 1.0f);
+    g.fillEllipse (handle);
+    g.setColour (controlBorder (enabled));
+    g.drawEllipse (handle.reduced (0.5f), 1.0f);
 }
 
 //==============================================================================
@@ -287,7 +294,7 @@ void MeonLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int wid
     const auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
     const auto knob = juce::Rectangle<float> (d, d).withCentre (bounds.getCentre());
     const float cx = knob.getCentreX(), cy = knob.getCentreY(), radius = d * 0.5f;
-    const juce::Colour line = enabled ? col::border : col::cardBorder;
+    const juce::Colour line = controlBorder (enabled);
 
     g.setColour (col::white);
     g.fillEllipse (knob);
