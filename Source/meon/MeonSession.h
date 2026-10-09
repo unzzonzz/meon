@@ -38,7 +38,7 @@ public:
         float pingMs = 0.0f, roundtripMs = 0.0f, jitterBufferMs = 0.0f;
         juce::int64 dropped = 0, resent = 0, received = 0;
         float gain = 1.0f;
-        bool muted = false;         // 내가 이 멤버 소리를 껐는지
+        bool muted = false;         // 내가 이 멤버 소리를 껐는지 (setMemberMuted 로만 바뀐다. 엔진 recvActive 는 상대가 마이크를 끄면 false 가 되므로 쓰지 않는다)
         bool defaultsApplied = false;
         bool hasStats = false;
     };
