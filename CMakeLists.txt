@@ -203,7 +203,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
     if (APPLE)
         list (APPEND HEADER_INCLUDES deps/mac/include)
         list (APPEND LIB_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/deps/mac/lib)
-        list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsMac.mm)
+        list (APPEND PlatSourceFiles  Source/CrossPlatformUtilsMac.mm Source/meon/MeonKeyRepeat_mac.mm)
     elseif (WIN32)
         # ASIO SDK (Steinberg, 2.3.4 부터 GPLv3 이중 라이선스). 기본 위치: 저장소 옆 ../asiosdk
         if (NOT ASIO_SDK_PATH)
@@ -284,6 +284,7 @@ function(sono_add_custom_plugin_target target_name product_name formats is_instr
         Source/meon/MeonLookAndFeel.h
         Source/meon/MeonWidgets.cpp
         Source/meon/MeonWidgets.h
+        Source/meon/MeonKeyRepeat.h
         Source/meon/MeonParts.cpp
         Source/meon/MeonParts.h
         Source/meon/MeonSettings.cpp
