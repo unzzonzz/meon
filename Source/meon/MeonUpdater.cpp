@@ -222,15 +222,112 @@ exit 0
         posix_spawnattr_destroy (&attr);
         return result == 0;
     }
+
+    // 플러그인 따라 바꾸기: CI 가 AU / VST3 를 Meon.app/Contents/Resources/MeonPlugins.zip 에 넣고,
+    // 각 플러그인 Info.plist 에 MeonBuildID(빌드 번호)를 적는다 (mac.yml).
+    // 앱은 켤 때 사용자 폴더(~/Library/Audio/Plug-Ins)에 설치된 Meon 플러그인이 자기보다 옛 빌드면 앱 안의 것으로 바꾼다.
+    // 설치돼 있지 않은 플러그인은 새로 깔지 않는다. MeonBuildID 가 없는 플러그인은 이 기능 이전 빌드라 0 으로 본다.
+    int pluginBuild (const juce::File& bundle)
+    {
+        auto xml = juce::XmlDocument::parse (bundle.getChildFile ("Contents/Info.plist"));
+        if (xml == nullptr)
+            return 0;
+        if (auto* dict = xml->getChildByName ("dict"))
+            for (auto* e = dict->getFirstChildElement(); e != nullptr; e = e->getNextElement())
+                if (e->hasTagName ("key") && e->getAllSubText() == "MeonBuildID")
+                    if (auto* v = e->getNextElement())
+                        return v->getAllSubText().trim().getIntValue();
+        return 0;
+    }
+
+    bool replaceBundle (const juce::File& newBundle, const juce::File& dest, const juce::File& staging)
+    {
+        const auto old = staging.getChildFile ("old-" + dest.getFileName());
+        old.deleteRecursively();
+        if (! dest.moveFileTo (old))
+        {
+            log ("plugin: move old failed: " + dest.getFullPathName());
+            return false;
+        }
+        if (! newBundle.moveFileTo (dest)
+            && ! runTool ({ "/usr/bin/ditto", newBundle.getFullPathName(), dest.getFullPathName() }, 120000))
+        {
+            log ("plugin: put new failed, restoring: " + dest.getFullPathName());
+            dest.deleteRecursively();
+            old.moveFileTo (dest);
+            return false;
+        }
+        old.deleteRecursively();
+        runTool ({ "/usr/bin/xattr", "-dr", "com.apple.quarantine", dest.getFullPathName() }, 30000);
+        log ("plugin: replaced " + dest.getFullPathName());
+        return true;
+    }
+
+    void syncPlugins()
+    {
+        const auto zip = juce::File::getSpecialLocation (juce::File::currentApplicationFile)
+                             .getChildFile ("Contents/Resources/MeonPlugins.zip");
+        if (! zip.existsAsFile())
+            return;
+
+        const auto plugIns = juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Library/Audio/Plug-Ins");
+        const juce::File targets[] { plugIns.getChildFile ("Components/Meon.component"), plugIns.getChildFile ("VST3/Meon.vst3") };
+
+        juce::Array<juce::File> stale;
+        for (auto& t : targets)
+            if (t.isDirectory() && pluginBuild (t) < MEON_BUILD_ID)
+                stale.add (t);
+        if (stale.isEmpty())
+            return;
+
+        // 같은 볼륨(사용자 폴더)에 풀어서 바꿔 넣기가 이름 바꾸기로 끝나게 한다
+        const auto staging = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                                 .getChildFile ("Application Support/MEON/PluginUpdate");
+        staging.deleteRecursively();
+        const auto unpacked = staging.getChildFile ("unpacked");
+        if (! unpacked.createDirectory()
+            || ! runTool ({ "/usr/bin/ditto", "-x", "-k", zip.getFullPathName(), unpacked.getFullPathName() }, 120000))
+        {
+            log ("plugin: unpack failed");
+            return;
+        }
+
+        bool componentReplaced = false;
+        for (auto& t : stale)
+        {
+            // 옛 이름(MEON.component 등)도 대소문자를 가리지 않는 볼륨이라 여기서 찾아지고, 새 이름으로 바뀐다
+            const auto src = unpacked.getChildFile (t.getFileName());
+            if (! src.isDirectory() || ! runTool ({ "/usr/bin/codesign", "--verify", "--deep", src.getFullPathName() }, 60000))
+            {
+                log ("plugin: bad package for " + t.getFileName());
+                continue;
+            }
+            if (! t.getParentDirectory().hasWriteAccess())
+            {
+                log ("plugin: no write access: " + t.getFullPathName());
+                continue;
+            }
+            if (replaceBundle (src, t, staging) && t.getFileExtension() == ".component")
+                componentReplaced = true;
+        }
+        staging.deleteRecursively();
+
+        // AU 목록 캐시를 새로 읽게 한다 (필요할 때 macOS 가 다시 띄운다). 열려 있는 DAW 는 다시 켜야 새 플러그인을 쓴다.
+        if (componentReplaced)
+            runTool ({ "/usr/bin/killall", "-9", "AudioComponentRegistrar" }, 10000);
+    }
    #endif
 }
 
 MeonUpdater::MeonUpdater() : juce::Thread ("MEON updater")
 {
    #if JUCE_MAC
-    // 지난 업데이트에서 남은 옛 앱 정리
     if (isSupported())
+    {
+        // 지난 업데이트에서 남은 옛 앱 정리
         oldAppBundle (currentAppBundle()).deleteRecursively();
+        juce::Thread::launch ([] { syncPlugins(); });
+    }
    #endif
 }
 

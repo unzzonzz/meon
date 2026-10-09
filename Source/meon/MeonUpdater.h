@@ -3,6 +3,7 @@
 // 앱은 build.txt 를 내 빌드 번호(MEON_BUILD_ID)와 비교하고, 새 빌드면 받아서 설치한다.
 // - Windows: 설치 프로그램을 조용한 설치(/SILENT)로 실행한 뒤 종료. 설치가 끝나면 설치 프로그램이 앱을 다시 켠다.
 // - macOS: MEON-mac.zip 을 받아 풀어 두고, 설치 때 MEON.app 을 바꿔 넣은 뒤 종료. launchd 사용자 작업이 앱을 다시 켠다.
+//   앱 안에 AU / VST3 도 들어 있어서, 켤 때 사용자 폴더에 설치된 옛 플러그인을 바꿔 넣는다 (syncPlugins).
 //   기록: ~/Library/Logs/MEON/update.log
 #pragma once
 
