@@ -37,6 +37,7 @@ struct Piece
     juce::String text;
     bool isEmoji = false;
     float x = 0.0f, width = 0.0f;
+    int start = 0;   // 원래 문자열에서의 글자 위치
 };
 
 struct Line
@@ -52,7 +53,13 @@ std::vector<Line> layout (const juce::String& text, const juce::Font& font, floa
 /** 배치한 줄들의 높이 (줄 간격 lineHeightPx) */
 float height (const std::vector<Line>& lines, const juce::Font& font, float lineHeightPx);
 
+/** links 범위는 linkColour 와 밑줄로 그린다 */
 void drawLines (juce::Graphics& g, const std::vector<Line>& lines, const juce::Font& font, juce::Colour colour,
-                juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification);
+                juce::Rectangle<float> area, float lineHeightPx, juce::Justification justification,
+                const TextRanges& links = {}, juce::Colour linkColour = {});
+
+/** drawLines 와 같은 인자로 그렸을 때 p 가 links 의 몇 번째 위에 있는지 (없으면 -1) */
+int hitTestLink (const std::vector<Line>& lines, const juce::Font& font, juce::Rectangle<float> area, float lineHeightPx,
+                 juce::Justification justification, const TextRanges& links, juce::Point<float> p);
 
 } // namespace meon::emoji

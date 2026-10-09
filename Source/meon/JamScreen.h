@@ -30,6 +30,9 @@ public:
     void cancelLeave();
     void doLeave();
     void sendChatText (const juce::String& text);
+    void requestOpenLink (const juce::String& link);   // 채팅 링크를 눌렀을 때: 확인 창을 띄운다
+    void cancelLink();
+    void openLink();
 
     static juce::String koreanTime (const juce::Time& t);
 
@@ -41,6 +44,7 @@ private:
     class ChatPanel;
     class ChatPeek;
     class LeaveDialog;
+    class LinkDialog;
 
     MeonEditor& editor;
     const bool plugin;
@@ -52,7 +56,8 @@ private:
     std::unique_ptr<ChatPanel> chat;
     std::unique_ptr<ChatPeek> chatPeek;
     std::unique_ptr<LeaveDialog> leaveDialog;
-    std::unique_ptr<LeaveDialog> dialogTrash;   // 버튼 콜백 안에서 지우지 않도록 다음 틱에 삭제
+    std::unique_ptr<LinkDialog> linkDialog;
+    std::unique_ptr<juce::Component> dialogTrash;   // 버튼 콜백 안에서 지우지 않도록 다음 틱에 삭제
     bool chatOpen = true;
     bool narrowChatOpen = false, narrowSeen = false;   // 좁은 플러그인 창에서 직접 연 경우 (저장하지 않음)
     bool quitAfterLeave = false;
