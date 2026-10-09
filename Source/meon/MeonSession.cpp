@@ -966,7 +966,6 @@ void MeonSession::refreshStats()
         m.resent = processor.getRemotePeerPacketsResent (idx);
         m.received = processor.getRemotePeerPacketsReceived (idx);
         m.gain = processor.getRemotePeerLevelGain (idx);
-        m.muted = ! processor.getRemotePeerRecvActive (idx);
         m.hasStats = true;
     }
     listeners.call ([] (Listener& l) { l.memberStatsChanged(); });
