@@ -3,9 +3,6 @@
 #if JUCE_MAC
  #include <unistd.h>
  #include <dlfcn.h>
- #include <fcntl.h>
- #include <spawn.h>
- #include <crt_externs.h>
  #include <string>
  #include <vector>
 #endif
@@ -148,81 +145,6 @@ namespace
         return true;
     }
 
-    // 앱이 꺼질 때까지 기다렸다가 다시 켠다. 앱이 띄운 프로세스는 새 세션(setsid)이어도 앱이 꺼질 때
-    // macOS 가 함께 정리한다 (build 9 에서 확인). 그래서 launchd 사용자 작업으로 맡겨 앱과 완전히 떼어 놓는다.
-    const char* const relaunchLabel = "com.meon.MEON.relaunch";
-    const char* const relaunchScript = R"(
-PID="$1"; APP="$2"; LOG="$3"; LABEL="$4"
-n=0
-while kill -0 "$PID" 2>/dev/null; do
-  n=$((n+1)); [ $n -gt 300 ] && break
-  sleep 0.2
-done
-sleep 0.5
-echo "$(date) relaunch $APP" >> "$LOG"
-/usr/bin/open "$APP" >> "$LOG" 2>&1 || echo "$(date) open failed" >> "$LOG"
-[ -n "$LABEL" ] && /bin/launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
-exit 0
-)";
-
-    juce::String xmlEscape (const juce::String& t)
-    {
-        return t.replace ("&", "&amp;").replace ("<", "&lt;").replace (">", "&gt;");
-    }
-
-    // launchd 에 한 번만 도는 사용자 작업으로 등록한다 (gui/<uid> 도메인이라 open 으로 앱을 켤 수 있다)
-    bool submitToLaunchd (const juce::StringArray& args, const juce::File& plist)
-    {
-        const auto domain = "gui/" + juce::String ((int) getuid());
-        runTool ({ "/bin/launchctl", "bootout", domain + "/" + relaunchLabel }, 10000);   // 지난번에 남은 작업 (없으면 실패해도 됨)
-
-        juce::String argsXml;
-        for (auto& a : args)
-            argsXml << "    <string>" << xmlEscape (a) << "</string>\n";
-        const auto text = juce::String ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
-                                        "<plist version=\"1.0\"><dict>\n"
-                                        "  <key>Label</key><string>") + relaunchLabel + "</string>\n"
-                          "  <key>ProgramArguments</key><array>\n" + argsXml + "  </array>\n"
-                          "  <key>RunAtLoad</key><true/>\n"
-                          "  <key>AbandonProcessGroup</key><true/>\n"
-                          "</dict></plist>\n";
-        if (! plist.replaceWithText (text))
-            return false;
-        return runTool ({ "/bin/launchctl", "bootstrap", domain, plist.getFullPathName() }, 10000);
-    }
-
-    bool spawnDetached (const juce::StringArray& args)
-    {
-        posix_spawnattr_t attr;
-        posix_spawnattr_init (&attr);
-       #ifdef POSIX_SPAWN_SETSID
-        posix_spawnattr_setflags (&attr, POSIX_SPAWN_SETSID);
-       #else
-        posix_spawnattr_setflags (&attr, POSIX_SPAWN_SETPGROUP);
-        posix_spawnattr_setpgroup (&attr, 0);
-       #endif
-        posix_spawn_file_actions_t files;
-        posix_spawn_file_actions_init (&files);
-        posix_spawn_file_actions_addopen (&files, 0, "/dev/null", O_RDONLY, 0);
-        posix_spawn_file_actions_addopen (&files, 1, "/dev/null", O_WRONLY, 0);
-        posix_spawn_file_actions_addopen (&files, 2, "/dev/null", O_WRONLY, 0);
-
-        std::vector<std::string> strings;
-        for (auto& a : args)
-            strings.push_back (a.toStdString());
-        std::vector<char*> argv;
-        for (auto& str : strings)
-            argv.push_back (str.data());
-        argv.push_back (nullptr);
-
-        pid_t pid = 0;
-        const int result = posix_spawn (&pid, argv[0], &files, &attr, argv.data(), *_NSGetEnviron());
-        posix_spawn_file_actions_destroy (&files);
-        posix_spawnattr_destroy (&attr);
-        return result == 0;
-    }
-
     // 플러그인 따라 바꾸기: CI 가 AU / VST3 를 Meon.app/Contents/Resources/MeonPlugins.zip 에 넣고,
     // 각 플러그인 Info.plist 에 MeonBuildID(빌드 번호)를 적는다 (mac.yml).
     // 앱은 켤 때 사용자 폴더(~/Library/Audio/Plug-Ins)에 설치된 Meon 플러그인이 자기보다 옛 빌드면 앱 안의 것으로 바꾼다.
@@ -324,9 +246,14 @@ MeonUpdater::MeonUpdater() : juce::Thread ("MEON updater")
    #if JUCE_MAC
     if (isSupported())
     {
-        // 지난 업데이트에서 남은 옛 앱 정리
-        oldAppBundle (currentAppBundle()).deleteRecursively();
-        juce::Thread::launch ([] { syncPlugins(); });
+        // 지난 업데이트에서 남은 옛 앱 정리. 업데이트 직후에는 옛 앱이 아직 꺼지는 중일 수 있어서 잠시 기다린다.
+        const auto old = oldAppBundle (currentAppBundle());
+        juce::Thread::launch ([old]
+        {
+            syncPlugins();
+            juce::Thread::sleep (10000);
+            old.deleteRecursively();
+        });
     }
    #endif
 }
@@ -539,8 +466,7 @@ bool MeonUpdater::launchInstaller()
         file = installer;
     }
    #if JUCE_MAC
-    // 앱을 먼저 바꿔 넣고, 꺼진 뒤 다시 켜는 것만 떨어진 프로세스에 맡긴다.
-    // 다시 켜기가 실패해도 사용자가 직접 켜면 새 버전이 뜬다.
+    // 앱을 먼저 바꿔 넣는다. 다시 켜기는 설정을 저장한 뒤 relaunchAfterInstall() 이 한다.
     const auto current = currentAppBundle();
     const auto app = newAppBundle (current);
     if (! replaceApp (file, current, app))
@@ -548,17 +474,10 @@ bool MeonUpdater::launchInstaller()
         setState (State::Failed);
         return false;
     }
-    auto script = downloadFolder().getChildFile ("relaunch.sh");
-    const juce::StringArray args { "/bin/sh", script.getFullPathName(), juce::String ((int) getpid()),
-                                   app.getFullPathName(), updateLog().getFullPathName(), relaunchLabel };
-    if (! script.replaceWithText (relaunchScript))
-        log ("relaunch script write failed");
-    else if (submitToLaunchd (args, downloadFolder().getChildFile ("relaunch.plist")))
-        log ("relaunch scheduled (launchd)");
-    else if (spawnDetached (args))
-        log ("relaunch scheduled (spawn, launchd failed)");
-    else
-        log ("relaunch spawn failed");
+    {
+        const juce::ScopedLock sl (lock);
+        installedApp = app;
+    }
     return true;   // 이미 바꿔 넣었으니 종료한다
    #else
     // /SILENT: 묻는 것 없이 진행 막대만 보여 준다. /UPDATE=1: 설치가 끝나면 앱을 다시 켠다 (wininstaller.iss).
@@ -567,6 +486,26 @@ bool MeonUpdater::launchInstaller()
         return true;
     setState (State::Ready);   // 다시 누를 수 있게 그대로 둔다
     return false;
+   #endif
+}
+
+void MeonUpdater::relaunchAfterInstall()
+{
+   #if JUCE_MAC
+    // 꺼지기 직전에 LaunchServices 에 새 앱을 새 인스턴스로 켜 달라고 한다 (open -n).
+    // 앱이 띄운 대기 프로세스(셸, setsid, launchd 작업)는 모두 앱이 꺼질 때 함께 사라지거나 돌지 않았다 (build 9~28).
+    // LaunchServices 가 띄운 앱은 이 앱의 자식이 아니라서 남는다. 옛 앱은 곧바로 꺼진다.
+    juce::File app;
+    {
+        const juce::ScopedLock sl (lock);
+        app = installedApp;
+    }
+    if (app == juce::File())
+        return;
+    if (runTool ({ "/usr/bin/open", "-n", app.getFullPathName() }, 15000))
+        log ("relaunch requested (open -n)");
+    else
+        log ("relaunch failed (open -n)");
    #endif
 }
 
