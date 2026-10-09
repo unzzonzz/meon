@@ -294,6 +294,9 @@ void LevelBar::paint (juce::Graphics& g)
 
     if (! disabledLook && juce::Time::getMillisecondCounterHiRes() < clipUntilMs)
     {
+        juce::Path track;   // 둥근 모서리 밖으로 나가지 않게 (CSS 의 overflow: hidden)
+        track.addRoundedRectangle (r, radius);
+        g.reduceClipRegion (track);
         g.setColour (col::ink);
         g.fillRect (r.removeFromRight (r.getWidth() * 0.06f));
     }
