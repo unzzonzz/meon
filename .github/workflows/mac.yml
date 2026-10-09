@@ -41,12 +41,21 @@ jobs:
 
       - name: ad-hoc 서명
         # Apple Silicon 은 서명 없는 실행 파일을 아예 실행하지 않는다. 개발자 ID 가 없으니 ad-hoc 으로만 서명한다.
+        # 플러그인에는 빌드 번호(MeonBuildID)를 적고, 서명한 플러그인을 앱 안 MeonPlugins.zip 에 넣은 뒤 앱을 서명한다.
+        # 앱은 켤 때 사용자 폴더의 옛 플러그인을 이것으로 바꾼다 (MeonUpdater.cpp syncPlugins).
         run: |
           A=build/MEON_artefacts/Release
-          for b in "$A/Standalone/Meon.app" "$A/AU/Meon.component" "$A/VST3/Meon.vst3"; do
+          for b in "$A/AU/Meon.component" "$A/VST3/Meon.vst3"; do
+            plutil -replace MeonBuildID -string "${{ github.run_number }}" "$b/Contents/Info.plist"
+            plutil -convert xml1 "$b/Contents/Info.plist"
             codesign --force --deep --sign - "$b"
             codesign --verify --verbose "$b"
           done
+          rm -rf pluginstage && mkdir pluginstage
+          cp -R "$A/AU/Meon.component" "$A/VST3/Meon.vst3" pluginstage/
+          ditto -c -k pluginstage "$A/Standalone/Meon.app/Contents/Resources/MeonPlugins.zip"
+          codesign --force --deep --sign - "$A/Standalone/Meon.app"
+          codesign --verify --deep --verbose "$A/Standalone/Meon.app"
           lipo -info "$A/Standalone/Meon.app/Contents/MacOS/Meon"
 
       - name: 디스크 이미지 만들기
