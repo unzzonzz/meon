@@ -310,6 +310,84 @@ juce::String VolumeSlider::dbText (double gain)
 }
 
 //==============================================================================
+PanKnob::PanKnob (int diameter)
+{
+    setSliderStyle (juce::Slider::RotaryVerticalDrag);
+    setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    setRotaryParameters (juce::degreesToRadians (-135.0f), juce::degreesToRadians (135.0f), true);
+    setRange (-100.0, 100.0, 1.0);
+    setValue (0.0, juce::dontSendNotification);
+    setDoubleClickReturnValue (true, 0.0);
+    setMouseDragSensitivity (200);
+    setWantsKeyboardFocus (false);
+    getProperties().set ("meonKnob", diameter);
+    setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+}
+
+// 드래그는 직접 처리한다 (1px = 1, Shift 미세 조절, 0 근처 스냅)
+void PanKnob::mouseDown (const juce::MouseEvent& e)
+{
+    if (! isEnabled())
+        return;
+    dragging = true;
+    dragRaw = getValue();
+    lastY = e.position.y;
+}
+
+void PanKnob::mouseDrag (const juce::MouseEvent& e)
+{
+    if (! isEnabled() || ! dragging)
+        return;
+    const float dy = lastY - e.position.y;   // 위로 올리면 증가
+    lastY = e.position.y;
+    dragRaw = juce::jlimit (-100.0, 100.0, dragRaw + dy * (e.mods.isShiftDown() ? 0.25 : 1.0));
+    int v = (int) std::lround (dragRaw);
+    if (std::abs (v) < 3)
+        v = 0;
+    setValue ((double) v, juce::sendNotificationSync);
+}
+
+void PanKnob::mouseUp (const juce::MouseEvent&)
+{
+    dragging = false;
+}
+
+void PanKnob::mouseDoubleClick (const juce::MouseEvent&)
+{
+    if (isEnabled())
+        setValue (0.0, juce::sendNotificationSync);
+}
+
+void PanKnob::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    if (! isEnabled() || dragging)
+        return;
+    const float d = (std::abs (wheel.deltaY) >= std::abs (wheel.deltaX) ? wheel.deltaY : -wheel.deltaX) * (wheel.isReversed ? -1.0f : 1.0f);
+    int steps = 0;
+    if (wheel.isSmooth)
+    {
+        // 트랙패드: 조금씩 모아서 한 칸씩
+        wheelAcc += d;
+        const float unit = 0.05f;
+        steps = (int) (wheelAcc / unit);
+        wheelAcc -= (float) steps * unit;
+    }
+    else if (d != 0.0f)
+    {
+        steps = d > 0.0f ? 1 : -1;
+    }
+    if (steps != 0)
+        setValue (juce::jlimit (-100.0, 100.0, getValue() + steps), juce::sendNotificationSync);
+}
+
+void PanKnob::enablementChanged()
+{
+    setMouseCursor (isEnabled() ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
+    juce::Slider::enablementChanged();
+    repaint();
+}
+
+//==============================================================================
 MeonCheckbox::MeonCheckbox() : juce::Button ("checkbox")
 {
     setClickingTogglesState (true);

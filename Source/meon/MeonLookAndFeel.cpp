@@ -270,6 +270,45 @@ void MeonLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int wid
 }
 
 //==============================================================================
+// 패닝 노브: 흰 원 + 1px 테두리, 테두리 바로 안쪽에서 중심을 향하는 지시선 (굵기 1.5, 테두리 쪽 각지게·중심 쪽 둥글게),
+// 가운데 숫자. 끊김(비활성)은 테두리·지시선 #E0E0E0, 숫자 '—'. 링·채움 호·그림자 없음.
+void MeonLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                                        float sliderPos, float startAngle, float endAngle, juce::Slider& slider)
+{
+    if (! slider.getProperties().contains ("meonKnob"))
+    {
+        juce::LookAndFeel_V4::drawRotarySlider (g, x, y, width, height, sliderPos, startAngle, endAngle, slider);
+        return;
+    }
+
+    const bool enabled = slider.isEnabled();
+    const float d = (float) (int) slider.getProperties()["meonKnob"];
+    const bool small = d < 36.0f;
+    const auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
+    const auto knob = juce::Rectangle<float> (d, d).withCentre (bounds.getCentre());
+    const float cx = knob.getCentreX(), cy = knob.getCentreY(), radius = d * 0.5f;
+    const juce::Colour line = enabled ? col::border : col::cardBorder;
+
+    g.setColour (col::white);
+    g.fillEllipse (knob);
+    g.setColour (line);
+    g.drawEllipse (knob.reduced (0.5f), 1.0f);
+
+    // 지시선: 12시 방향으로 만든 뒤 값 × 1.35° 만큼 중심 기준 회전
+    const float w = 1.5f, len = small ? 5.0f : 6.0f;
+    const float top = cy - (radius - 1.0f);
+    juce::Path pointer;
+    pointer.addRoundedRectangle (cx - w * 0.5f, top, w, len, w * 0.5f, w * 0.5f, false, false, true, true);
+    const float angle = juce::degreesToRadians ((float) slider.getValue() * 1.35f);
+    g.setColour (line);
+    g.fillPath (pointer, juce::AffineTransform::rotation (angle, cx, cy));
+
+    g.setColour (col::inkSub);
+    g.setFont (Fonts::get (600, small ? 10.0f : 11.0f));
+    g.drawText (enabled ? juce::String ((int) std::lround (slider.getValue())) : TXT ("—"), knob, juce::Justification::centred, false);
+}
+
+//==============================================================================
 void MeonLookAndFeel::drawScrollbar (juce::Graphics& g, juce::ScrollBar& /*scrollbar*/, int x, int y, int width, int height,
                                      bool isScrollbarVertical, int thumbStartPosition, int thumbSize,
                                      bool /*isMouseOver*/, bool /*isMouseDown*/)

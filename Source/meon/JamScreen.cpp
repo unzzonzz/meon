@@ -202,7 +202,8 @@ private:
 class JamScreen::MemberCard : public juce::Component
 {
 public:
-    MemberCard (JamScreen& o, int slotIn) : owner (o), plugin (o.isPlugin()), slot (slotIn), muteButton (TXT ("뮤트")), resetButton (TXT ("0 dB로"))
+    MemberCard (JamScreen& o, int slotIn) : owner (o), plugin (o.isPlugin()), slot (slotIn), muteButton (TXT ("뮤트")), resetButton (TXT ("0 dB로")),
+                                        panKnob (o.isPlugin() ? 32 : 40)
     {
         meter.setCornerRadius (3.0f);
         volume.setColour (juce::Slider::backgroundColourId, col::cardBorder);
@@ -242,6 +243,17 @@ public:
         addAndMakeVisible (volume);
         addAndMakeVisible (muteButton);
         addAndMakeVisible (resetButton);
+
+        // 패닝: 내가 듣는 소리에만 적용 (전송 안 함)
+        panKnob.onValueChange = [this]
+        {
+            if (! syncing && haveMember && member.connected)
+            {
+                member.pan = (int) panKnob.getValue();
+                owner.getEditor().getSession().setMemberPan (slot, member.pan);
+            }
+        };
+        addAndMakeVisible (panKnob);
     }
 
     int getSlot() const { return slot; }
@@ -264,6 +276,11 @@ public:
             volume.setValue (0.0, juce::dontSendNotification);
         else if (! volume.isMouseButtonDown())
             volume.setValue (m.gain, juce::dontSendNotification);
+        panKnob.setEnabled (! off);
+        if (off)
+            panKnob.setValue (0.0, juce::dontSendNotification);
+        else if (! panKnob.isMouseButtonDown())
+            panKnob.setValue ((double) m.pan, juce::dontSendNotification);
         syncing = false;
 
         muteButton.setLabel ((m.muted && ! off) ? TXT ("소리 켜기") : TXT ("뮤트"));
@@ -313,7 +330,14 @@ public:
         volume.setBounds (r.getX() + labelW, volY + (volH - 16) / 2, textRight - textW - rowGap - (r.getX() + labelW), 16);
         volTextArea = juce::Rectangle<int> (textRight - textW, volY, textW, volH);
         volLabelArea = juce::Rectangle<int> (r.getX(), volY, labelW, volH);
-        statusArea = juce::Rectangle<int> (muteButton.getRight() + (plugin ? 8 : 10), muteButton.getY(), r.getRight() - muteButton.getRight() - 10, muteH);
+
+        // 뮤트 줄 오른쪽 끝: (앱) "패닝" 라벨 + 노브. 노브는 뮤트 버튼과 세로 가운데를 맞춘다
+        const int knobD = plugin ? 32 : 40;
+        panKnob.setBounds (r.getRight() - knobD, muteButton.getBounds().getCentreY() - knobD / 2, knobD, knobD);
+        const int panLabelW = plugin ? 0 : (int) std::ceil (Fonts::get (500, 13.0f).getStringWidthFloat (TXT ("패닝")));
+        panLabelArea = juce::Rectangle<int> (panKnob.getX() - (plugin ? 0 : 8) - panLabelW, muteButton.getY(), panLabelW, muteH);
+        const int statusX = muteButton.getRight() + (plugin ? 8 : 10);
+        statusArea = juce::Rectangle<int> (statusX, muteButton.getY(), juce::jmax (0, panLabelArea.getX() - 10 - statusX), muteH);
     }
 
     void paint (juce::Graphics& g) override
@@ -370,6 +394,7 @@ public:
             g.setFont (Fonts::get (500, 13.0f));
             g.setColour (col::inkSub);
             g.drawText (TXT ("볼륨"), volLabelArea, juce::Justification::centredLeft, false);
+            g.drawText (TXT ("패닝"), panLabelArea, juce::Justification::centredRight, false);
         }
         g.setFont (Fonts::get (600, plugin ? 13.0f : 14.0f));
         g.setColour (ink);
@@ -397,9 +422,10 @@ private:
     LevelBar meter;
     VolumeSlider volume;
     MeonButton muteButton, resetButton;
+    PanKnob panKnob;
     MeonSession::Member member;
     bool haveMember = false, syncing = false;
-    juce::Rectangle<int> volTextArea, volLabelArea, statusArea;
+    juce::Rectangle<int> volTextArea, volLabelArea, statusArea, panLabelArea;
 
     /** 머리 영역 높이: 앱은 이름 줄 + 4 + 파트 이름 줄, 플러그인은 이름 줄 하나 */
     int headerHeight() const

@@ -38,6 +38,7 @@ public:
         float pingMs = 0.0f, roundtripMs = 0.0f, jitterBufferMs = 0.0f;
         juce::int64 dropped = 0, resent = 0, received = 0;
         float gain = 1.0f;
+        int pan = 0;                // -100(왼쪽)..100(오른쪽). 내 믹스에만 적용, 전송 안 함. 다시 들어오면 새 Member 라 0
         bool muted = false;         // 내가 이 멤버 소리를 껐는지 (setMemberMuted 로만 바뀐다. 엔진 recvActive 는 상대가 마이크를 끄면 false 가 되므로 쓰지 않는다)
         bool defaultsApplied = false;
         bool hasStats = false;
@@ -103,6 +104,7 @@ public:
 
     void setMemberMuted (int slot, bool muted);
     void setMemberGain (int slot, float gain);
+    void setMemberPan (int slot, int pan);
     float getMemberLevelDb (int slot) const;
     float getMemberPeakLevelDb (int slot) const;
 
@@ -199,8 +201,10 @@ private:
     void clearRoom (const juce::String& reason);
     void applyProcessorDefaults();
     void applyPeerDefaults (int peerIndex, Member& m);
+    void applyPeerPan (int peerIndex, int pan, bool onlyIfChanged);
     void refreshStats();
-    void reconcilePeers();
+    void reconcilePeers (bool adoptEnginePan = false);   // true: 에디터를 다시 열 때 엔진에 남은 패닝을 이어받는다
+    int readPeerPan (int peerIndex) const;
     void writeLogSample();
 
     Member* findMember (const juce::String& user);
