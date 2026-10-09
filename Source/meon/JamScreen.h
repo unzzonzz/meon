@@ -81,6 +81,8 @@ private:
     void playbackChanged() override;
     void sessionStateChanged() override { repaint (topBar); }
     void timerCallback() override;
+    void meterFrame();
+    juce::VBlankAttachment vblank { this, [this] { meterFrame(); } };   // 마지막 멤버: 가장 먼저 해제된다
 };
 
 } // namespace meon

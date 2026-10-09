@@ -1509,17 +1509,23 @@ void JamScreen::updateCards()
     repaint (topBar);
 }
 
-void JamScreen::timerCallback()
+// 레벨 막대는 화면 주사율에 맞춰 (VBlank) 움직인다. 타이머는 간격이 들쭉날쭉해서 막대가 떨린다.
+void JamScreen::meterFrame()
 {
-    dialogTrash = nullptr;
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);
     lastTickMs = now;
     auto& session = editor.getSession();
     me->pushLevel (session.getMySendLevelDb(), dt, now);
-    player->tick (now);
     for (auto* card : cards)
         card->pushLevel (session.getMemberLevelDb (card->getSlot()), dt);
+}
+
+void JamScreen::timerCallback()
+{
+    dialogTrash = nullptr;
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    player->tick (now);
     if (chatPeek->isVisible() && now - lastPeekRepaintMs > 15000.0)   // "방금 / N분 전" 갱신
     {
         lastPeekRepaintMs = now;

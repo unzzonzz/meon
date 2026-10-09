@@ -86,7 +86,7 @@ public:
     /** -60~0 dB 를 0~1 위치로 (디자인 눈금: -60/-40/-20/-12/-6/0) */
     static float dbToPosition (float db);
 
-    /** 프레임마다 호출. 상승은 즉시, 하강은 300 ms 감쇠. */
+    /** 프레임마다 호출. 상승은 즉시, 하강은 초당 30 dB. */
     void push (float db, double dtSeconds);
     void reset();
     float getShownDb() const { return shownDb; }
@@ -99,6 +99,7 @@ public:
 private:
     float shownDb = -100.0f;
     double clipUntilMs = 0.0;
+    bool clipShown = false;
     bool disabledLook = false;
     float radius = 5.0f;
 };

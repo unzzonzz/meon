@@ -577,7 +577,6 @@ InputLevelScreen::InputLevelScreen (MeonEditor& e)
     lastSignalMs = juce::Time::getMillisecondCounterHiRes();
     lastTickMs = lastSignalMs;
     updateLabels();
-    startTimerHz (60);
 }
 
 juce::String InputLevelScreen::channelText() const
@@ -611,7 +610,7 @@ void InputLevelScreen::updateLabels()
     footerHint.setText (noSignal ? TXT ("신호가 없어도 넘어갈 수 있어요") : juce::String());
 }
 
-void InputLevelScreen::timerCallback()
+void InputLevelScreen::onFrame()
 {
     const double now = juce::Time::getMillisecondCounterHiRes();
     const double dt = juce::jlimit (0.0, 0.2, (now - lastTickMs) * 0.001);

@@ -242,22 +242,34 @@ float LevelBar::dbToPosition (float db)
 
 void LevelBar::push (float db, double dtSeconds)
 {
-    const float decayPerSec = 60.0f / 0.3f;   // 감쇠 300 ms 로 -60 dB 까지
+    // DAW(Logic 등) 피크 미터 방식: 오를 때는 즉시, 내릴 때는 일정한 속도(초당 30 dB)로 미끄러지듯.
+    // 프레임마다(VBlank) 호출되면 하강이 끊김 없이 이어진다.
+    const float fallDbPerSec = 30.0f;
+    db = juce::jmax (db, -100.0f);
+    const float prev = shownDb;
     if (db >= shownDb)
         shownDb = db;
     else
-        shownDb = juce::jmax (db, shownDb - (float) dtSeconds * decayPerSec);
+        shownDb = juce::jmax (db, juce::jmin (shownDb, 0.0f) - (float) dtSeconds * fallDbPerSec);
+    if (shownDb < -70.0f)   // 화면 밖(-60 아래)은 바로 바닥으로
+        shownDb = db;
 
+    const double now = juce::Time::getMillisecondCounterHiRes();
     if (db >= -0.1f)
-        clipUntilMs = juce::Time::getMillisecondCounterHiRes() + 1500.0;
+        clipUntilMs = now + 1500.0;
+    const bool clip = now < clipUntilMs;
 
-    repaint();
+    // 화면상 0.1px 이상 움직였거나 클립 표시가 바뀔 때만 다시 그린다 (조용할 때 매 프레임 그리지 않게)
+    if (std::abs (dbToPosition (shownDb) - dbToPosition (prev)) * (float) getWidth() > 0.1f || clip != clipShown)
+        repaint();
+    clipShown = clip;
 }
 
 void LevelBar::reset()
 {
     shownDb = -100.0f;
     clipUntilMs = 0.0;
+    clipShown = false;
     repaint();
 }
 
