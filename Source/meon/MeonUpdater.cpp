@@ -43,7 +43,7 @@ namespace
 
    #if JUCE_MAC
     // 브라우저로 받은 dmg 에서 끌어다 놓은 앱은 격리 속성 때문에 macOS 가 읽기 전용 임시 위치
-    // (…/AppTranslocation/…)로 옮겨서 실행한다 (App Translocation). 그때는 원래 자리(/Applications/MEON.app 등)를 찾는다.
+    // (…/AppTranslocation/…)로 옮겨서 실행한다 (App Translocation). 그때는 원래 자리(/Applications/Meon.app 등)를 찾는다.
     // CoreFoundation/Security 헤더는 JUCE 이름과 부딪혀서 함수만 dlsym 으로 가져온다.
     juce::File originalPathIfTranslocated (const juce::File& app)
     {
@@ -79,7 +79,7 @@ namespace
         return result;
     }
 
-    // 바꿔 넣을 MEON.app (실행 중인 앱의 원래 자리)
+    // 실행 중인 Meon.app 의 원래 자리
     juce::File currentAppBundle()
     {
         return originalPathIfTranslocated (juce::File::getSpecialLocation (juce::File::currentApplicationFile));
@@ -116,9 +116,16 @@ namespace
         f.appendText (juce::Time::getCurrentTime().toString (true, true) + " " + text + "\n");
     }
 
-    // 실행 중인 MEON.app 자리에 새 앱을 넣는다. 실행 중인 앱은 이미 메모리에 올라와 있어서 바꿔도 된다.
+    // 새 앱을 넣을 자리. 이름을 MEON.app 에서 Meon.app 으로 바꿨으므로, 옛 이름 그대로면 새 이름으로 넣는다.
+    // (옛 앱은 먼저 옮겨 두므로 대소문자를 가리지 않는 볼륨에서도 겹치지 않는다. 사용자가 바꾼 이름은 그대로 둔다.)
+    juce::File newAppBundle (const juce::File& app)
+    {
+        return app.getFileName() == "MEON.app" ? app.getSiblingFile ("Meon.app") : app;
+    }
+
+    // 실행 중인 앱을 옮겨 두고 dest 에 새 앱을 넣는다. 실행 중인 앱은 이미 메모리에 올라와 있어서 바꿔도 된다.
     // 실패하면 원래 앱을 되돌려 놓는다.
-    bool replaceApp (const juce::File& newApp, const juce::File& app)
+    bool replaceApp (const juce::File& newApp, const juce::File& app, const juce::File& dest)
     {
         const auto old = oldAppBundle (app);
         old.deleteRecursively();
@@ -128,16 +135,16 @@ namespace
             return false;
         }
         // 같은 볼륨이면 이름만 바꾸고, 아니면 ditto 로 복사한다 (서명·심볼릭 링크 보존)
-        if (! newApp.moveFileTo (app)
-            && ! runTool ({ "/usr/bin/ditto", newApp.getFullPathName(), app.getFullPathName() }, 120000))
+        if (! newApp.moveFileTo (dest)
+            && ! runTool ({ "/usr/bin/ditto", newApp.getFullPathName(), dest.getFullPathName() }, 120000))
         {
             log ("put new app failed, restoring");
-            app.deleteRecursively();
+            dest.deleteRecursively();
             old.moveFileTo (app);
             return false;
         }
-        runTool ({ "/usr/bin/xattr", "-dr", "com.apple.quarantine", app.getFullPathName() }, 30000);
-        log ("replaced " + app.getFullPathName());
+        runTool ({ "/usr/bin/xattr", "-dr", "com.apple.quarantine", dest.getFullPathName() }, 30000);
+        log ("replaced " + app.getFullPathName() + " -> " + dest.getFullPathName());
         return true;
     }
 
@@ -406,8 +413,8 @@ bool MeonUpdater::runDownload()
     if (threadShouldExit()
         || ! runTool ({ "/usr/bin/ditto", "-x", "-k", target.getFullPathName(), unpacked.getFullPathName() }, 120000))
         return false;
-    auto app = unpacked.getChildFile ("MEON.app");
-    if (! app.getChildFile ("Contents/MacOS/MEON").existsAsFile()
+    auto app = unpacked.getChildFile ("Meon.app");
+    if (! app.getChildFile ("Contents/MacOS/Meon").existsAsFile()
         || ! runTool ({ "/usr/bin/codesign", "--verify", "--deep", app.getFullPathName() }, 60000))
         return false;
     target.deleteFile();
@@ -437,8 +444,9 @@ bool MeonUpdater::launchInstaller()
    #if JUCE_MAC
     // 앱을 먼저 바꿔 넣고, 꺼진 뒤 다시 켜는 것만 떨어진 프로세스에 맡긴다.
     // 다시 켜기가 실패해도 사용자가 직접 켜면 새 버전이 뜬다.
-    const auto app = currentAppBundle();
-    if (! replaceApp (file, app))
+    const auto current = currentAppBundle();
+    const auto app = newAppBundle (current);
+    if (! replaceApp (file, current, app))
     {
         setState (State::Failed);
         return false;

@@ -1,7 +1,8 @@
-# Windows 빌드: main 에 push 할 때마다 MEON 설치 프로그램(.exe)을 만든다.
+# Windows 빌드: main 에 push 할 때마다 Meon 설치 프로그램(.exe)을 만든다.
 # - 실행 결과 페이지의 Artifacts 에서 받을 수 있고,
 # - main 빌드는 'windows-latest' 프리릴리스에도 올라가서 항상 같은 주소로 최신 설치 파일을 받을 수 있다:
-#   https://github.com/unzzonzz/meon/releases/download/windows-latest/MEON-Installer.exe
+#   https://github.com/unzzonzz/meon/releases/download/windows-latest/meon-setup.exe
+# - 같은 파일을 MEON-Installer.exe 로도 올린다. 이미 설치된 앱이 자동 업데이트로 받는 이름이라 바꾸지 않는다.
 name: Windows build
 
 on:
@@ -49,7 +50,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p snapshots
-          EXE=build/MEON_artefacts/Release/Standalone/MEON.exe
+          EXE=build/MEON_artefacts/Release/Standalone/Meon.exe
           for s in audio settings home; do
             timeout 60 "$EXE" --nickname=테스트 --screen=$s --window=0,0,1280,800 --snapshot=snapshots/win_$s.png || true
           done
@@ -79,11 +80,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp release/instoutput/MEON-*-Installer.exe MEON-Installer.exe
+          cp release/instoutput/meon-*-setup.exe meon-setup.exe
+          cp meon-setup.exe MEON-Installer.exe
           NOTES="main $(git rev-parse --short HEAD) 빌드 (v${{ steps.ver.outputs.version }}, run ${{ github.run_number }})"
           gh release delete windows-latest --yes --cleanup-tag || true
-          gh release create windows-latest MEON-Installer.exe --prerelease --target "$GITHUB_SHA" \
-            --title "MEON Windows (최신 main 빌드)" --notes "$NOTES"
+          gh release create windows-latest meon-setup.exe MEON-Installer.exe --prerelease --target "$GITHUB_SHA" \
+            --title "Meon Windows (최신 main 빌드)" --notes "$NOTES"
           # 앱의 업데이트 확인용 빌드 번호. 설치 파일이 다 올라간 뒤에 올려야 앱이 반쯤 올라간 파일을 받지 않는다.
           echo "${{ github.run_number }}" > build.txt
           gh release upload windows-latest build.txt

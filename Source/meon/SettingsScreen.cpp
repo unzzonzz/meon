@@ -249,7 +249,7 @@ juce::String SettingsScreen::Content::updateDetail() const
         case MeonUpdater::State::Downloading:
             return now + TXT (" → build ") + juce::String (u.getLatestBuild()) + TXT (" · 다 받으면 앱이 다시 켜져요");
         case MeonUpdater::State::Failed:
-            return u.lastFailureWasPermission() ? TXT ("MEON 을 응용 프로그램 폴더로 옮긴 뒤 다시 켜 주세요")
+            return u.lastFailureWasPermission() ? TXT ("Meon 을 응용 프로그램 폴더로 옮긴 뒤 다시 켜 주세요")
                                                 : TXT ("인터넷 연결을 확인하고 다시 시도해 주세요");
         default:
             return now;
