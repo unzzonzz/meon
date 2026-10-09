@@ -1,4 +1,5 @@
 #include "MeonWidgets.h"
+#include "MeonKeyRepeat.h"
 #include "MeonEmoji.h"
 
 namespace meon
@@ -211,6 +212,31 @@ void MeonTextEditor::paintOverChildren (juce::Graphics& g)
     }
 
     juce::TextEditor::paintOverChildren (g);
+}
+
+bool MeonTextEditor::keyPressed (const juce::KeyPress& k)
+{
+    KeyRepeat::noteKeyEvent (*this);
+    return juce::TextEditor::keyPressed (k);
+}
+
+void MeonTextEditor::insertTextAtCaret (const juce::String& t)
+{
+    KeyRepeat::noteKeyEvent (*this);   // 글자·한글 조합은 keyPressed 를 거치지 않고 입력기에서 바로 온다
+    juce::TextEditor::insertTextAtCaret (t);
+}
+
+bool MeonTextEditor::keyStateChanged (bool isKeyDown)
+{
+    if (! isKeyDown)
+        KeyRepeat::stop();
+    return juce::TextEditor::keyStateChanged (isKeyDown);
+}
+
+void MeonTextEditor::focusLost (FocusChangeType cause)
+{
+    KeyRepeat::stop();
+    juce::TextEditor::focusLost (cause);
 }
 
 void MeonTextEditor::setPlaceholder (const juce::String& text)
