@@ -2,7 +2,7 @@
 // CI 가 main 빌드마다 windows-latest / mac-latest 프리릴리스에 새 빌드와 build.txt(빌드 번호)를 올린다.
 // 앱은 build.txt 를 내 빌드 번호(MEON_BUILD_ID)와 비교하고, 새 빌드면 받아서 설치한다.
 // - Windows: 설치 프로그램을 조용한 설치(/SILENT)로 실행한 뒤 종료. 설치가 끝나면 설치 프로그램이 앱을 다시 켠다.
-// - macOS: MEON-mac.zip 을 받아 풀어 두고, 설치 때 MEON.app 을 바꿔 넣은 뒤 종료. launchd 사용자 작업이 앱을 다시 켠다.
+// - macOS: MEON-mac.zip 을 받아 풀어 두고, 설치 때 MEON.app 을 바꿔 넣은 뒤 종료. 종료 직전에 open -n 으로 새 앱을 켠다.
 //   앱 안에 AU / VST3 도 들어 있어서, 켤 때 사용자 폴더에 설치된 옛 플러그인을 바꿔 넣는다 (syncPlugins).
 //   기록: ~/Library/Logs/MEON/update.log
 #pragma once
@@ -40,6 +40,8 @@ public:
     void download();
     /** Ready 일 때 설치를 시작한다 (Windows: 설치 프로그램 실행, macOS: 앱 교체 후 다시 켜기 예약). 성공하면 true (호출한 쪽이 앱을 종료한다). */
     bool launchInstaller();
+    /** launchInstaller() 가 성공하고 설정을 저장한 뒤, 종료 직전에 부른다. macOS: 새 앱을 켠다. Windows: 할 일 없음 (설치 프로그램이 켠다). */
+    void relaunchAfterInstall();
 
     State getState() const;
     int getLatestBuild() const      { return latestBuild.load(); }
@@ -60,6 +62,7 @@ private:
     std::atomic<bool> failedOnDownload { false };
     std::atomic<bool> failedOnPermission { false };
     juce::File installer;
+    juce::File installedApp;   // macOS: 바꿔 넣은 앱 (다시 켤 대상)
 
     void setState (State s);
     void start (Job j, State s);

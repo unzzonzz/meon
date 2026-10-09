@@ -237,6 +237,7 @@ void MeonEditor::installUpdate()
     if (! updater->launchInstaller())
         return;
     saveAll();
+    updater->relaunchAfterInstall();   // 설정을 저장한 뒤에 새 앱을 켠다 (macOS)
     if (auto* app = juce::JUCEApplicationBase::getInstance())
         app->systemRequestedQuit();
 }
