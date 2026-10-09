@@ -284,7 +284,7 @@ MeonSessionLog::AudioInfo MeonEditor::collectAudioInfo() const
         info.deviceType = "host";
         info.host = getHostDescription();
         info.sampleRate = processor.getSampleRate();
-        info.bufferSize = processor.getBlockSize();
+        info.bufferSize = processor.getCurrSamplesPerBlock();
     }
     else if (auto* dm = deviceManager())
     {
