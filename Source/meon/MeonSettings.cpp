@@ -112,6 +112,22 @@ juce::File MeonSettings::getLogFolder()
 #endif
 }
 
+/** 닉네임에 쓸 수 있는 특수문자: 키보드 기호(!@#$ 등)와 한글 입력기의 특수문자(ㅁ+한자: ★♥♪※→① 등).
+    제어 문자·보이지 않는 문자·이모지(U+1F000 이후)는 뺀다. '#' 은 이름 뒤에 붙이는 #XXXX 와 겹쳐도
+    마지막 '#' 으로 자르므로 괜찮다 (MeonSession::displayNameFor). */
+static bool isNicknameSymbol (juce::juce_wchar c)
+{
+    return (c >= 0x21 && c <= 0x7E)                     // ASCII 기호 (영문·숫자는 위에서 걸러짐)
+        || (c >= 0xA1 && c <= 0xBF && c != 0xAD)        // ¡ ¢ £ ¥ § ° ± · ¿ 등 (0xAD 소프트 하이픈 제외)
+        || c == 0xD7 || c == 0xF7                       // × ÷
+        || (c >= 0x2010 && c <= 0x2027)                 // ‐ – — ‘ ’ “ ” † ‡ • … 등
+        || (c >= 0x2030 && c <= 0x205E)                 // ‰ ′ ″ ※ ‼ ⁂ 등
+        || (c >= 0x2100 && c <= 0x27BF)                 // ℃ ™ → ∞ ⌘ ① ■ ★ ♥ ♪ ✓ ✿ 등
+        || (c >= 0x3001 && c <= 0x303F)                 // 、 。 〈 〉 《 》 「 」 【 】 〜 등 (0x3000 전각 공백 제외)
+        || (c >= 0x3200 && c <= 0x33FF)                 // ㈜ ㉠ ㉮ ㎏ ㎡ 등
+        || (c >= 0xFF01 && c <= 0xFF5E);                // 전각 기호·영숫자 ！ ＠ ～ 등
+}
+
 bool MeonSettings::isValidNickname (const juce::String& nameIn)
 {
     auto name = nameIn.trim();
@@ -125,7 +141,7 @@ bool MeonSettings::isValidNickname (const juce::String& nameIn)
         const bool hangul = (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x3131 && c <= 0x318E);
         const bool latin  = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
         const bool digit  = (c >= '0' && c <= '9');
-        if (! (hangul || latin || digit || c == ' '))
+        if (! (hangul || latin || digit || c == ' ' || isNicknameSymbol (c)))
             return false;
     }
     return true;

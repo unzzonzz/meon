@@ -327,7 +327,11 @@ public:
         const int resetW = resetButton.getIdealWidth (plugin ? 8 : 10);
         resetButton.setBounds (r.getRight() - resetW, volY, resetW, resetH);
         const int textRight = resetButton.getX() - (plugin ? 8 : 10);
-        volume.setBounds (r.getX() + labelW, volY + (volH - 16) / 2, textRight - textW - rowGap - (r.getX() + labelW), 16);
+        // 트랙이 [r.getX() + labelW, 값 앞] 에 딱 맞게: 슬라이더는 양쪽을 손잡이 반지름만큼 들이므로 그만큼 넓힌다.
+        // 끝에 간 손잡이는 카드 안쪽 여백(padX) 위로 반만 나간다.
+        const int thumbR = plugin ? 7 : 8;
+        const int trackL = r.getX() + labelW, trackR = textRight - textW - rowGap;
+        volume.setBounds (trackL - thumbR, volY + (volH - 16) / 2, trackR - trackL + thumbR * 2, 16);
         volTextArea = juce::Rectangle<int> (textRight - textW, volY, textW, volH);
         volLabelArea = juce::Rectangle<int> (r.getX(), volY, labelW, volH);
 

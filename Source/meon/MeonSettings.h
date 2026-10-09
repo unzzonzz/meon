@@ -36,7 +36,7 @@ public:
     static juce::File getSettingsFolder();
     static juce::File getLogFolder();
 
-    /** 닉네임 규칙: 한글·영문·숫자 2–12자 */
+    /** 닉네임 규칙: 한글·영문·숫자·공백·특수문자(키보드 기호, 한글 입력기 특수문자) 2–12자. 이모지·제어 문자 제외 */
     static bool isValidNickname (const juce::String& name);
 
 private:

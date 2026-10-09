@@ -69,7 +69,7 @@ NicknameScreen::NicknameScreen (MeonEditor& e)
                       e.isPluginMode() ? TXT ("합주 방에서 멤버들에게 보이는 이름과 파트예요.")
                                        : TXT ("합주 방에서 멤버들에게 보이는 이름과 파트예요. 나중에 설정에서 바꿀 수 있어요.")),
       fieldLabel (TXT ("닉네임"), 13.0f, 500, col::inkSub),
-      fieldHint (TXT ("한글·영문·숫자 2–12자"), 13.0f, 400, col::disabled),
+      fieldHint (TXT ("한글·영문·숫자·특수문자 2–12자"), 13.0f, 400, col::disabled),
       partLabel (TXT ("파트"), 13.0f, 500, col::inkSub),
       input (e.isPluginMode() ? 16.0f : 17.0f),
       partSelector (e.isPluginMode() ? PartSelector::Style { 8, 24.0f, 8, 14.0f, 600 }
