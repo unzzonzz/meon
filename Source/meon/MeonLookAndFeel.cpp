@@ -255,8 +255,10 @@ void MeonLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int wid
     const bool enabled = slider.isEnabled();
     const float cy = (float) y + (float) height * 0.5f;
     const float thumb = (float) (int) slider.getProperties().getWithDefault ("meonThumb", 16);
-    const float trackX = (float) x + thumb * 0.5f;
-    const float trackW = (float) width - thumb;
+    // x / width 는 JUCE 가 이미 손잡이 반지름(getSliderThumbRadius)만큼 양쪽을 들인 값이다.
+    // 여기서 또 들이면 트랙 앞뒤에 여백이 두 번 생기고, 끝에서 손잡이가 안 움직이는 구간도 생긴다.
+    const float trackX = (float) x;
+    const float trackW = (float) width;
 
     // 트랙 4px
     juce::Rectangle<float> track (trackX, cy - 2.0f, trackW, 4.0f);
