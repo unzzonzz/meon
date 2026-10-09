@@ -913,21 +913,14 @@ void MeonSession::reconcilePeers()
         const int idx = findPeerIndex (m.userName);
         if (idx >= 0)
         {
-            const bool conn = processor.getRemotePeerConnected (idx);
-            if (conn != m.connected && ! m.pending)
+            // 엔진의 connected 는 '어느 쪽으로든 소리가 흐르는지'다 (aoo 는 받던 소리가 끊기면 STOP 을 낸다).
+            // 그래서 양쪽 다 마이크를 끄거나, 내가 마이크를 끈 채 상대를 뮤트하면 false 가 된다.
+            // 상대가 정말 나간 것은 서버의 PeerLeft 로 오므로, 엔진 값으로는 끊김 처리하지 않고 연결만 반영한다.
+            if (processor.getRemotePeerConnected (idx) && ! m.connected && ! m.pending)
             {
-                if (! conn)
-                {
-                    ++m.dropCount;
-                    m.disconnectedSinceMs = now;
-                    if (log.isActive()) log.addEvent ("peerDisconnected", m.userName);
-                }
-                else
-                {
-                    m.disconnectedSinceMs = 0.0;
-                    if (log.isActive()) log.addEvent ("peerReconnected", m.userName);
-                }
-                m.connected = conn;
+                m.disconnectedSinceMs = 0.0;
+                if (log.isActive()) log.addEvent ("peerReconnected", m.userName);
+                m.connected = true;
                 changed = true;
             }
             if (! m.defaultsApplied && m.connected)
