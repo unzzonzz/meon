@@ -189,7 +189,10 @@ int hitTestParagraphLink (const juce::String& text, const juce::Font& font, juce
             const int endIndex = toIndex (line.stringRange.getEnd());   // 줄 끝 공백은 정렬 폭에 들어가지 않는다
             if (endIndex > 0 && endIndex <= n && juce::CharacterFunctions::isWhitespace (text[endIndex - 1])
                 && ! line.runs.isEmpty() && ! line.runs.getLast()->glyphs.isEmpty())
-                lineW -= line.runs.getLast()->glyphs.getLast().width;
+            {
+                const auto& glyphs = line.runs.getLast()->glyphs;
+                lineW -= glyphs.getReference (glyphs.size() - 1).width;
+            }
             if (justification.testFlags (juce::Justification::right))
                 shift = area.getWidth() - lineW;
             else if (justification.testFlags (juce::Justification::horizontallyCentred))
@@ -205,8 +208,10 @@ int hitTestParagraphLink (const juce::String& text, const juce::Font& font, juce
             {
                 if (! links[k].contains (index))
                     continue;
-                const float x0 = area.getX() + shift + line.lineOrigin.x + run->glyphs.getFirst().anchor.x;
-                const float x1 = area.getX() + shift + line.lineOrigin.x + run->glyphs.getLast().anchor.x + run->glyphs.getLast().width;
+                const auto& first = run->glyphs.getReference (0);   // Glyph 는 기본 생성자가 없어 getFirst/getLast 를 못 쓴다
+                const auto& last = run->glyphs.getReference (run->glyphs.size() - 1);
+                const float x0 = area.getX() + shift + line.lineOrigin.x + first.anchor.x;
+                const float x1 = area.getX() + shift + line.lineOrigin.x + last.anchor.x + last.width;
                 if (p.x >= x0 && p.x < x1)
                     return (int) k;
             }
