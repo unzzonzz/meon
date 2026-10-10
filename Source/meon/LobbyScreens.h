@@ -32,10 +32,21 @@ private:
         juce::String message, action;
     };
 
+    /** 디스코드 커뮤니티 링크. 오른쪽 아래 검은 원 + 흰 로고 (디자인 A5 / P3). */
+    class DiscordButton : public juce::Button
+    {
+    public:
+        DiscordButton();
+        void paintButton (juce::Graphics&, bool, bool) override;
+    private:
+        juce::Path logo;
+    };
+
     MeonEditor& editor;
     const bool plugin;
     MeonButton settingsButton, createButton, joinButton;
     UpdateNotice updateNotice;
+    DiscordButton discordButton;
     juce::Rectangle<int> centre, footer;
 
     void updateState();

@@ -107,6 +107,28 @@ void HomeScreen::UpdateNotice::paintButton (juce::Graphics& g, bool over, bool)
 }
 
 //==============================================================================
+HomeScreen::DiscordButton::DiscordButton() : juce::Button ("Discord")
+{
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setWantsKeyboardFocus (false);
+    setTooltip ("Discord");
+    // 디스코드 공식 로고 (viewBox 0 0 127.14 96.36)
+    logo = juce::Drawable::parseSVGPath ("M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.44-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69Z");
+    onClick = [] { juce::URL ("https://discord.gg/vtGQpnc2HQ").launchInDefaultBrowser(); };
+}
+
+void HomeScreen::DiscordButton::paintButton (juce::Graphics& g, bool over, bool)
+{
+    auto r = getLocalBounds().toFloat();
+    g.setColour (over ? juce::Colour (0xFF333333u) : col::ink);
+    g.fillEllipse (r);
+    // 로고: 48 원에 24×18, 42 원에 21×16 (디자인)
+    const float w = r.getWidth() * 0.5f, h = w * 96.36f / 127.14f;
+    g.setColour (col::white);
+    g.fillPath (logo, logo.getTransformToScaleToFit (r.withSizeKeepingCentre (w, h), true));
+}
+
+//==============================================================================
 HomeScreen::HomeScreen (MeonEditor& e)
     : editor (e), plugin (e.isPluginMode()),
       settingsButton (TXT ("설정")),
@@ -137,6 +159,7 @@ HomeScreen::HomeScreen (MeonEditor& e)
     addAndMakeVisible (settingsButton);
     addAndMakeVisible (createButton);
     addAndMakeVisible (joinButton);
+    addAndMakeVisible (discordButton);
     if (! plugin && MeonUpdater::isSupported())
     {
         addChildComponent (updateNotice);
@@ -182,6 +205,9 @@ void HomeScreen::resized()
         const int nw = updateNotice.getIdealWidth();
         updateNotice.setBounds (r.getCentreX() - nw / 2, settingsButton.getY(), nw, settingsButton.getHeight());
     }
+
+    const int dcSize = plugin ? 42 : 48, dcMargin = plugin ? 18 : 24;
+    discordButton.setBounds (r.getRight() - dcMargin - dcSize, r.getBottom() - dcMargin - dcSize, dcSize, dcSize);
 
     const int footerH = (plugin ? 16 : 16) + (plugin ? 20 : 28);
     footer = r.removeFromBottom (footerH);
